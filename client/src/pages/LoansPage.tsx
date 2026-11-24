@@ -19,6 +19,9 @@ import {
   Clock,
   Landmark,
   UserCheck,
+  Car,
+  CreditCard,
+  Users,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api, { Loan, LoanSummary, Account, LoansResponse } from '../services/api';
@@ -33,6 +36,7 @@ import {
   Skeleton,
   SkeletonCard,
   SkeletonMetric,
+  AnimatedNumber,
 } from '../components/ui';
 import { formatCurrency, formatSecondaryUSD, formatDate } from '../utils/formatters';
 import { triggerConfetti } from '../utils/confetti';
@@ -137,26 +141,138 @@ export default function LoansPage() {
     loadData();
   }, [loadData, refreshTrigger]);
 
-  const handleOpenCreateModal = (presetType?: 'OWED_BY_ME' | 'OWED_TO_ME') => {
+  const handleOpenCreateModal = (
+    presetType?: 'OWED_BY_ME' | 'OWED_TO_ME',
+    preset?: {
+      name?: string;
+      category?: string;
+      lender?: string;
+      originalAmount?: number;
+      remainingBalance?: number;
+      interestRate?: number;
+      minimumPayment?: number;
+    }
+  ) => {
     setEditingLoan(null);
+    const chosenType = presetType || activeTab;
     setFormData({
-      name: '',
-      type: presetType || activeTab,
-      category: 'PERSONAL_LOAN',
-      lender: '',
-      originalAmount: '',
-      remainingBalance: '',
-      interestRate: '0',
-      minimumPayment: '',
+      name: preset?.name || '',
+      type: chosenType,
+      category: preset?.category || (chosenType === 'OWED_TO_ME' ? 'FRIENDS_FAMILY' : 'PERSONAL_LOAN'),
+      lender: preset?.lender || '',
+      originalAmount: preset?.originalAmount ? String(preset.originalAmount) : '',
+      remainingBalance: preset?.remainingBalance ? String(preset.remainingBalance) : (preset?.originalAmount ? String(preset.originalAmount) : ''),
+      interestRate: preset?.interestRate !== undefined ? String(preset.interestRate) : '0',
+      minimumPayment: preset?.minimumPayment ? String(preset.minimumPayment) : '',
       currency: 'MVR',
       dueDate: '',
       dueDay: '1',
-      accountId: accounts[0]?.id || '',
-      color: presetType === 'OWED_TO_ME' ? '#10B981' : '#6366F1',
+      accountId: accounts.find((a) => a.isDefault)?.id || accounts[0]?.id || '',
+      color: chosenType === 'OWED_TO_ME' ? '#10B981' : '#6366F1',
       notes: '',
     });
     setLoanModalOpen(true);
   };
+
+  const debtTemplates = [
+    {
+      title: 'BML Islamic Auto Financing',
+      subtitle: 'MVR 35,000 • 6.5% interest',
+      badge: 'Vehicle',
+      icon: Car,
+      onClick: () =>
+        handleOpenCreateModal('OWED_BY_ME', {
+          name: 'Motorcycle Financing',
+          category: 'VEHICLE',
+          lender: 'Bank of Maldives',
+          originalAmount: 35000,
+          remainingBalance: 28000,
+          interestRate: 6.5,
+          minimumPayment: 1200,
+        }),
+    },
+    {
+      title: 'Bank Personal Loan',
+      subtitle: 'MVR 50,000 • 8.0% interest',
+      badge: 'Personal',
+      icon: Landmark,
+      onClick: () =>
+        handleOpenCreateModal('OWED_BY_ME', {
+          name: 'Personal Bank Loan',
+          category: 'PERSONAL_LOAN',
+          lender: 'MIB / BML',
+          originalAmount: 50000,
+          remainingBalance: 42000,
+          interestRate: 8.0,
+          minimumPayment: 1800,
+        }),
+    },
+    {
+      title: 'Credit Card Outstanding',
+      subtitle: 'MVR 12,000 • 18% APR',
+      badge: 'High Priority',
+      icon: CreditCard,
+      onClick: () =>
+        handleOpenCreateModal('OWED_BY_ME', {
+          name: 'Credit Card Balance',
+          category: 'CREDIT_CARD',
+          lender: 'BML Card Center',
+          originalAmount: 12000,
+          remainingBalance: 12000,
+          interestRate: 18.0,
+          minimumPayment: 600,
+        }),
+    },
+    {
+      title: 'Friend / Family Loan',
+      subtitle: 'MVR 15,000 • 0% interest',
+      badge: 'Peer-to-Peer',
+      icon: Users,
+      onClick: () =>
+        handleOpenCreateModal('OWED_BY_ME', {
+          name: 'Family Relocation Loan',
+          category: 'FRIENDS_FAMILY',
+          lender: 'Personal',
+          originalAmount: 15000,
+          remainingBalance: 10000,
+          interestRate: 0,
+          minimumPayment: 1000,
+        }),
+    },
+  ];
+
+  const receivableTemplates = [
+    {
+      title: 'Peer / Friend IOU',
+      subtitle: 'MVR 5,000 • Pending return',
+      badge: 'Friend',
+      icon: UserCheck,
+      onClick: () =>
+        handleOpenCreateModal('OWED_TO_ME', {
+          name: 'Friend Emergency Help',
+          category: 'FRIENDS_FAMILY',
+          lender: 'Friend',
+          originalAmount: 5000,
+          remainingBalance: 5000,
+          interestRate: 0,
+        }),
+    },
+    {
+      title: 'Work Expense Advance',
+      subtitle: 'MVR 2,500 • Company reimbursement',
+      badge: 'Work',
+      icon: Wallet,
+      onClick: () =>
+        handleOpenCreateModal('OWED_TO_ME', {
+          name: 'Office Travel Expense Advance',
+          category: 'OTHER',
+          lender: 'Employer',
+          originalAmount: 2500,
+          remainingBalance: 2500,
+          interestRate: 0,
+        }),
+    },
+  ];
 
   const handleOpenEditModal = (loan: Loan) => {
     setEditingLoan(loan);
@@ -240,7 +356,7 @@ export default function LoansPage() {
   const handleOpenPayModal = (loan: Loan) => {
     setPayingLoan(loan);
     setPayingAmount(String(loan.minimumPayment > 0 ? loan.minimumPayment : loan.remainingBalance));
-    setPayAccountId(loan.accountId || accounts[0]?.id || '');
+    setPayAccountId(loan.accountId || accounts.find((a) => a.isDefault)?.id || accounts[0]?.id || '');
     setPayDate(new Date().toISOString().split('T')[0]);
     setPayNotes('');
     setPayModalOpen(true);
@@ -359,88 +475,88 @@ export default function LoansPage() {
   return (
     <div className="space-y-6 animate-fade-in pb-12">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-white/[0.06]">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white font-display flex items-center gap-2.5">
-            <Coins className="w-7 h-7 text-indigo-400" />
-            Loans & Debt Payoff Tracker
+          <h1 className="text-xl sm:text-2xl font-bold text-white font-display tracking-tight flex items-center gap-2">
+            <Coins className="w-5 h-5 text-indigo-400" />
+            Loans & Debt Tracker
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+          <p className="text-xs text-zinc-400 mt-0.5">
             Track bank loans, Islamic financing, IOUs, and accelerate payoff using Snowball &amp; Avalanche strategies.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          <Button onClick={() => handleOpenCreateModal()}>
-            <Plus className="w-4 h-4" /> Add Debt or Loan
+        <div className="flex items-center gap-2">
+          <Button onClick={() => handleOpenCreateModal()} size="sm">
+            <Plus className="w-3.5 h-3.5" /> Add Debt or Loan
           </Button>
         </div>
       </div>
 
       {/* Summary KPI Cockpit */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-400 font-medium">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
+        <Card className="space-y-2 p-4">
+          <div className="flex items-center justify-between text-xs text-zinc-400 font-medium">
             <span>Total Debts I Owe</span>
             <div className="w-7 h-7 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
-              <ArrowDownLeft className="w-4 h-4" />
+              <ArrowDownLeft className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-xl sm:text-2xl font-extrabold text-white tabular-nums">
-            {hide ? '••••••' : formatCurrency(summary.totalOwedByMe, currency)}
+          <div className="text-lg sm:text-xl font-bold text-white font-display tabular-nums">
+            <AnimatedNumber value={summary.totalOwedByMe} currency={currency} hide={hide} />
           </div>
-          <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
-            <span>Monthly Installments:</span>
-            <span className="font-semibold text-rose-300">
-              {hide ? '••••' : formatCurrency(summary.totalMonthlyCommitment, currency)}/mo
+          <div className="flex items-center justify-between text-[11px] text-zinc-500 pt-0.5">
+            <span>Installments:</span>
+            <span className="font-semibold text-rose-400">
+              <AnimatedNumber value={summary.totalMonthlyCommitment} currency={currency} hide={hide} />/mo
             </span>
           </div>
         </Card>
 
-        <Card className="space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-400 font-medium">
-            <span>Money Owed to Me (IOUs)</span>
+        <Card className="space-y-2 p-4">
+          <div className="flex items-center justify-between text-xs text-zinc-400 font-medium">
+            <span>Receivables (IOUs)</span>
             <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-              <ArrowUpRight className="w-4 h-4" />
+              <ArrowUpRight className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-xl sm:text-2xl font-extrabold text-white tabular-nums">
-            {hide ? '••••••' : formatCurrency(summary.totalOwedToMe, currency)}
+          <div className="text-lg sm:text-xl font-bold text-white font-display tabular-nums">
+            <AnimatedNumber value={summary.totalOwedToMe} currency={currency} hide={hide} />
           </div>
-          <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
-            <span>Active Receivables:</span>
-            <span className="font-semibold text-emerald-400">{summary.activeReceivablesCount} people</span>
+          <div className="flex items-center justify-between text-[11px] text-zinc-500 pt-0.5">
+            <span>People:</span>
+            <span className="font-semibold text-emerald-400"><AnimatedNumber value={summary.activeReceivablesCount} /> active</span>
           </div>
         </Card>
 
-        <Card className="space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-400 font-medium">
-            <span>Net Debt Position</span>
+        <Card className="space-y-2 p-4">
+          <div className="flex items-center justify-between text-xs text-zinc-400 font-medium">
+            <span>Net Position</span>
             <div className="w-7 h-7 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-              <TrendingDown className="w-4 h-4" />
+              <TrendingDown className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className={`text-xl sm:text-2xl font-extrabold tabular-nums ${summary.netDebtBalance > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-            {hide ? '••••••' : formatCurrency(Math.abs(summary.netDebtBalance), currency)}
+          <div className={`text-lg sm:text-xl font-bold font-display tabular-nums ${summary.netDebtBalance > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+            <AnimatedNumber value={Math.abs(summary.netDebtBalance)} currency={currency} hide={hide} />
           </div>
-          <div className="text-[11px] text-slate-400 pt-1">
+          <div className="text-[11px] text-zinc-500 pt-0.5">
             {summary.netDebtBalance > 0 ? 'Net Liability Owed' : 'Net Surplus Receivable'}
           </div>
         </Card>
 
-        <Card className="space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-400 font-medium">
-            <span>Overall Payoff Progress</span>
-            <div className="w-7 h-7 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
-              <Sparkles className="w-4 h-4" />
+        <Card className="space-y-2 p-4">
+          <div className="flex items-center justify-between text-xs text-zinc-400 font-medium">
+            <span>Payoff Progress</span>
+            <div className="w-7 h-7 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+              <Sparkles className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-xl sm:text-2xl font-extrabold text-white tabular-nums">
-            {overallPayoffPct.toFixed(1)}%
+          <div className="text-lg sm:text-xl font-bold text-white font-display tabular-nums">
+            <AnimatedNumber value={overallPayoffPct} decimals={1} suffix="%" />
           </div>
-          <ProgressBar value={overallPayoffPct} color="#8B5CF6" height="h-2" />
-          <div className="text-[11px] text-slate-400 pt-0.5">
-            {summary.paidOffCount} debts fully settled
+          <ProgressBar value={overallPayoffPct} color="#6366F1" height="h-1.5" />
+          <div className="text-[11px] text-zinc-500 pt-0.5">
+            <AnimatedNumber value={summary.paidOffCount} /> settled
           </div>
         </Card>
       </div>
@@ -575,6 +691,8 @@ export default function LoansPage() {
               ? 'Add your vehicle financing, bank personal loans, or family borrowings to visualize your payoff timeline.'
               : 'Record money lent to colleagues or friends so you never lose track of pending repayments.'
           }
+          templatesTitle={activeTab === 'OWED_BY_ME' ? 'Popular financing & debt templates:' : 'Common receivables templates:'}
+          templates={activeTab === 'OWED_BY_ME' ? debtTemplates : receivableTemplates}
           action={
             <Button onClick={() => handleOpenCreateModal(activeTab)}>
               <Plus className="w-4 h-4" /> Add {activeTab === 'OWED_BY_ME' ? 'Debt / Loan' : 'Receivable / IOU'}
@@ -629,7 +747,7 @@ export default function LoansPage() {
                     <div className="flex items-baseline justify-between">
                       <span className="text-xs text-slate-400">Remaining Balance:</span>
                       <span className="text-lg font-bold text-white tabular-nums">
-                        {hide ? '••••••' : formatCurrency(loan.remainingBalance, loan.currency)}
+                        <AnimatedNumber value={loan.remainingBalance} currency={loan.currency} hide={hide} />
                       </span>
                     </div>
 
@@ -640,9 +758,9 @@ export default function LoansPage() {
                     />
 
                     <div className="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
-                      <span>{loan.progressPercentage}% paid off</span>
+                      <span><AnimatedNumber value={loan.progressPercentage || 0} suffix="%" /> paid off</span>
                       <span>
-                        Original: {hide ? '••••' : formatCurrency(loan.originalAmount, loan.currency)}
+                        Original: <AnimatedNumber value={loan.originalAmount} currency={loan.currency} hide={hide} />
                       </span>
                     </div>
                   </div>
@@ -783,7 +901,7 @@ export default function LoansPage() {
                 <option value="">None (Update loan balance only)</option>
                 {accounts.map((acc) => (
                   <option key={acc.id} value={acc.id}>
-                    {acc.name} ({acc.currency} {acc.balance.toFixed(2)})
+                    {acc.name} ({acc.currency} {acc.balance.toFixed(2)}){acc.isDefault ? ' ★ Default' : ''}
                   </option>
                 ))}
               </select>
@@ -1013,7 +1131,7 @@ export default function LoansPage() {
                 <option value="">None (Manual Tracking)</option>
                 {accounts.map((acc) => (
                   <option key={acc.id} value={acc.id}>
-                    {acc.name} ({acc.currency})
+                    {acc.name} ({acc.currency}){acc.isDefault ? ' ★ Default' : ''}
                   </option>
                 ))}
               </select>

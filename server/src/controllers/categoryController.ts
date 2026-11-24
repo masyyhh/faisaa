@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import prisma from '../prisma/client.js';
 import { categorySchema } from '../validators/schemas.js';
+import { DEFAULT_USD_TO_MVR_RATE } from '../utils/currency.js';
 
 export async function getCategories(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -8,13 +9,15 @@ export async function getCategories(req: Request, res: Response, next: NextFunct
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
+    const rate = req.user?.usdToMvrRate || DEFAULT_USD_TO_MVR_RATE;
+
     const categories = await prisma.category.findMany({
       where: { userId },
       orderBy: [{ type: 'asc' }, { name: 'asc' }],
       include: {
         transactions: {
           where: { date: { gte: startOfMonth } },
-          select: { amount: true },
+          select: { amount: true, currency: true },
         },
         _count: {
           select: { transactions: true },
@@ -23,11 +26,14 @@ export async function getCategories(req: Request, res: Response, next: NextFunct
     });
 
     const formatted = categories.map((c) => {
-      const monthlyTotal = c.transactions.reduce((sum: number, t: { amount: number }) => sum + t.amount, 0);
+      const monthlyTotal = c.transactions.reduce((sum: number, t: { amount: number; currency: string }) => {
+        const amtMvr = t.currency === 'USD' ? t.amount * rate : t.amount;
+        return sum + amtMvr;
+      }, 0);
       const { transactions, ...rest } = c;
       return {
         ...rest,
-        monthlyTotal,
+        monthlyTotal: Number(monthlyTotal.toFixed(2)),
         transactionCount: c._count.transactions,
       };
     });

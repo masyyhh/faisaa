@@ -1,6 +1,7 @@
 import type { User, Account, Transaction, Bill, RecurringTransaction, Budget } from '@prisma/client';
 import prisma from '../prisma/client.js';
 import { sendTelegramNotification, type TelegramSendResult } from './telegramService.js';
+import { DEFAULT_USD_TO_MVR_RATE } from '../utils/currency.js';
 
 export interface WarningBudget {
   name: string;
@@ -51,7 +52,7 @@ export async function getBriefingData(userId: string): Promise<BriefingData | nu
   if (!user) return null;
 
   const now = new Date();
-  const rate = user.usdToMvrRate || 18.45;
+  const rate = user.usdToMvrRate || DEFAULT_USD_TO_MVR_RATE;
 
   // 1. Account Balances
   let mvrTotal = 0;
@@ -135,21 +136,34 @@ export async function getBriefingData(userId: string): Promise<BriefingData | nu
   const startOfMonth = new Date(currentYear, currentMonth - 1, 1);
   const warningBudgets: WarningBudget[] = [];
 
+  // Batch query all expenses for active budget categories in a single query (resolves N+1 query bottleneck)
+  const categoryIds = budgets.map((b) => b.categoryId).filter(Boolean);
+  const allExpenses =
+    categoryIds.length > 0
+      ? await prisma.transaction.findMany({
+          where: {
+            userId,
+            categoryId: { in: categoryIds },
+            type: 'EXPENSE',
+            date: { gte: startOfMonth, lte: now },
+          },
+          select: {
+            categoryId: true,
+            amount: true,
+            currency: true,
+          },
+        })
+      : [];
+
+  const spentByCat = new Map<string, number>();
+  for (const tx of allExpenses) {
+    if (!tx.categoryId) continue;
+    const amt = tx.currency === 'USD' ? tx.amount * rate : tx.amount;
+    spentByCat.set(tx.categoryId, (spentByCat.get(tx.categoryId) || 0) + amt);
+  }
+
   for (const b of budgets) {
-    const catExpenses = await prisma.transaction.findMany({
-      where: {
-        userId,
-        categoryId: b.categoryId,
-        type: 'EXPENSE',
-        date: { gte: startOfMonth, lte: now },
-      },
-    });
-
-    const totalSpent = catExpenses.reduce((sum: number, tx: Transaction) => {
-      const amt = tx.currency === 'USD' ? tx.amount * rate : tx.amount;
-      return sum + amt;
-    }, 0);
-
+    const totalSpent = spentByCat.get(b.categoryId) || 0;
     const percentage = b.amount > 0 ? (totalSpent / b.amount) * 100 : 0;
     if (percentage >= (b.alertThreshold || 80)) {
       warningBudgets.push({

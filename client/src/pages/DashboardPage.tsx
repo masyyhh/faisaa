@@ -8,6 +8,7 @@ import {
   Eye,
   EyeOff,
   ChevronRight,
+  Landmark,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -29,6 +30,9 @@ import {
   SkeletonCard,
   SkeletonChart,
   SkeletonTable,
+  EmptyState,
+  AnimatedNumber,
+  InstitutionLogo,
 } from '../components/ui';
 import { formatCurrency, formatSecondaryUSD, formatDate, DynamicIcon } from '../utils/formatters';
 
@@ -303,7 +307,7 @@ export default function DashboardPage() {
                 <option value="ALL">All Accounts ({accounts.length})</option>
                 {accounts.map((acc) => (
                   <option key={acc.id} value={acc.id}>
-                    {acc.name} ({acc.currency})
+                    {acc.name} ({acc.currency}){acc.isDefault ? ' ★' : ''}
                   </option>
                 ))}
               </select>
@@ -311,15 +315,15 @@ export default function DashboardPage() {
 
             <div className="mt-4 sm:mt-5">
               <p className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-white font-display tabular-nums break-words">
-                {formatCurrency(displayedBalance, 'MVR', hide)}
+                <AnimatedNumber value={displayedBalance} currency="MVR" hide={hide} />
               </p>
               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1.5">
                 <span className="text-xs font-medium text-emerald-400 tabular-nums">
-                  {formatSecondaryUSD(displayedBalance, liveRate, hide)} USD
+                  ≈ <AnimatedNumber value={displayedBalance / liveRate} currency="$" suffix=" USD" hide={hide} />
                 </span>
                 <span className="text-zinc-600 hidden sm:inline">•</span>
                 <span className="text-xs text-zinc-400">
-                  {savingsRate}% savings rate
+                  <AnimatedNumber value={savingsRate} decimals={1} suffix="% savings rate" />
                 </span>
               </div>
             </div>
@@ -361,10 +365,10 @@ export default function DashboardPage() {
             </div>
             <div className="mt-3">
               <p className="text-xl sm:text-2xl font-bold text-white font-display tabular-nums">
-                {formatCurrency(totalIncome, 'MVR', hide)}
+                <AnimatedNumber value={totalIncome} currency="MVR" hide={hide} />
               </p>
               <p className="text-xs text-zinc-500 mt-0.5 tabular-nums">
-                {formatSecondaryUSD(totalIncome, liveRate, hide)} USD
+                ≈ <AnimatedNumber value={totalIncome / liveRate} currency="$" suffix=" USD" hide={hide} />
               </p>
             </div>
           </Card>
@@ -378,10 +382,10 @@ export default function DashboardPage() {
             </div>
             <div className="mt-3">
               <p className="text-xl sm:text-2xl font-bold text-white font-display tabular-nums">
-                {formatCurrency(totalExpenses, 'MVR', hide)}
+                <AnimatedNumber value={totalExpenses} currency="MVR" hide={hide} />
               </p>
               <p className="text-xs text-zinc-500 mt-0.5 tabular-nums">
-                {formatSecondaryUSD(totalExpenses, liveRate, hide)} USD
+                ≈ <AnimatedNumber value={totalExpenses / liveRate} currency="$" suffix=" USD" hide={hide} />
               </p>
             </div>
           </Card>
@@ -399,11 +403,15 @@ export default function DashboardPage() {
                   netCashflow >= 0 ? 'text-emerald-400' : 'text-rose-400'
                 }`}
               >
-                {netCashflow >= 0 ? '+' : ''}
-                {formatCurrency(netCashflow, 'MVR', hide)}
+                <AnimatedNumber
+                  value={netCashflow}
+                  currency="MVR"
+                  prefix={netCashflow >= 0 ? '+' : ''}
+                  hide={hide}
+                />
               </p>
               <p className="text-xs text-zinc-500 mt-0.5 tabular-nums">
-                {formatSecondaryUSD(netCashflow, liveRate, hide)} USD
+                ≈ <AnimatedNumber value={netCashflow / liveRate} currency="$" suffix=" USD" hide={hide} />
               </p>
             </div>
           </Card>
@@ -415,10 +423,10 @@ export default function DashboardPage() {
             </div>
             <div className="mt-3">
               <p className="text-xl sm:text-2xl font-bold text-white font-display tabular-nums">
-                {formatCurrency(netWorth, 'MVR', hide)}
+                <AnimatedNumber value={netWorth} currency="MVR" hide={hide} />
               </p>
               <p className="text-xs text-zinc-500 mt-0.5 tabular-nums">
-                {formatSecondaryUSD(netWorth, liveRate, hide)} USD • {accounts.length} accounts
+                ≈ <AnimatedNumber value={netWorth / liveRate} currency="$" suffix=" USD" hide={hide} /> • {accounts.length} accounts
               </p>
             </div>
           </Card>
@@ -426,40 +434,68 @@ export default function DashboardPage() {
       </div>
 
       {/* Minimalist Account Strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {accounts.slice(0, 5).map((acc) => (
-          <div
-            key={acc.id}
-            onClick={() => navigate('/accounts')}
-            className="faisaa-card p-3.5 rounded-xl bg-[#111218] border border-white/[0.06] hover:border-white/[0.15] transition-colors cursor-pointer flex flex-col justify-between gap-2.5"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-medium text-zinc-300 truncate">{acc.name}</span>
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-white/[0.05] text-zinc-400 shrink-0">
-                {acc.currency}
-              </span>
+      {accounts.length === 0 ? (
+        <EmptyState
+          icon={Landmark}
+          title="No bank or cash accounts connected yet"
+          description="Add your Bank of Maldives (BML), Maldives Islamic Bank (MIB), or USD cash balances to see your live liquid portfolio."
+          action={
+            <Button size="sm" onClick={() => navigate('/accounts')}>
+              <Plus className="w-4 h-4" /> Add First Account
+            </Button>
+          }
+        />
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {accounts.slice(0, 5).map((acc) => (
+            <div
+              key={acc.id}
+              onClick={() => navigate('/accounts')}
+              className="faisaa-card p-3.5 rounded-xl bg-[#111218] border border-white/[0.06] hover:border-white/[0.15] transition-colors cursor-pointer flex flex-col justify-between gap-2.5"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <InstitutionLogo
+                    institution={acc.institution}
+                    accountName={acc.name}
+                    accountType={acc.type}
+                    icon={acc.icon}
+                    color={acc.color}
+                    size="xs"
+                  />
+                  <span className="text-xs font-medium text-zinc-300 truncate">{acc.name}</span>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {acc.isDefault && (
+                    <span className="text-[11px] text-amber-400 font-bold" title="Default Account">★</span>
+                  )}
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-white/[0.05] text-zinc-400">
+                    {acc.currency}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <p
+                  className={`text-sm font-bold tabular-nums ${
+                    acc.balance < 0 ? 'text-rose-400' : 'text-white'
+                  }`}
+                >
+                  <AnimatedNumber value={acc.balance} currency={acc.currency} hide={hide} />
+                </p>
+                {acc.currency === 'USD' ? (
+                  <span className="block text-[11px] text-zinc-500 tabular-nums mt-0.5">
+                    ≈ <AnimatedNumber value={acc.balance * liveRate} currency="MVR" hide={hide} />
+                  </span>
+                ) : (
+                  <span className="block text-[11px] text-zinc-500 mt-0.5 truncate">
+                    {acc.institution || acc.type}
+                  </span>
+                )}
+              </div>
             </div>
-            <div>
-              <p
-                className={`text-sm font-bold tabular-nums ${
-                  acc.balance < 0 ? 'text-rose-400' : 'text-white'
-                }`}
-              >
-                {formatCurrency(acc.balance, acc.currency, hide)}
-              </p>
-              {acc.currency === 'USD' ? (
-                <span className="block text-[11px] text-zinc-500 tabular-nums mt-0.5">
-                  ≈ {formatCurrency(acc.balance * liveRate, 'MVR', hide)}
-                </span>
-              ) : (
-                <span className="block text-[11px] text-zinc-500 mt-0.5 truncate">
-                  {acc.institution || acc.type}
-                </span>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Charts Row: Minimalist Cashflow + Category Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">

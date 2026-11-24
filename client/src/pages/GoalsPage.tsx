@@ -8,6 +8,10 @@ import {
   CheckCircle2,
   Calendar,
   Target,
+  Shield,
+  Plane,
+  Laptop,
+  Car,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api, { SavingsGoal, Milestone, Account } from '../services/api';
@@ -19,9 +23,11 @@ import {
   Modal,
   ConfirmDialog,
   LoadingState,
+  EmptyState,
   Skeleton,
   SkeletonCard,
   SkeletonMetric,
+  AnimatedNumber,
 } from '../components/ui';
 import { triggerConfetti } from '../utils/confetti';
 import { formatCurrency, formatDate, DynamicIcon } from '../utils/formatters';
@@ -96,19 +102,84 @@ export default function GoalsPage() {
     loadGoals();
   }, [loadGoals, refreshTrigger]);
 
-  const openAddModal = () => {
+  const openAddModal = (preset?: {
+    name?: string;
+    targetAmount?: number;
+    color?: string;
+    icon?: string;
+    description?: string;
+  }) => {
     setEditingGoal(null);
     setForm({
-      name: '',
-      targetAmount: '',
+      name: preset?.name || '',
+      targetAmount: preset?.targetAmount ? String(preset.targetAmount) : '',
       currentAmount: '0',
       targetDate: new Date(Date.now() + 180 * 86400000).toISOString().split('T')[0],
-      color: '#8B5CF6',
-      icon: 'piggy-bank',
-      description: '',
+      color: preset?.color || '#8B5CF6',
+      icon: preset?.icon || 'piggy-bank',
+      description: preset?.description || '',
     });
     setModalOpen(true);
   };
+
+  const goalTemplates = [
+    {
+      title: 'Emergency Fund (3 Months)',
+      subtitle: 'MVR 45,000 Target',
+      badge: 'High Priority',
+      icon: Shield,
+      onClick: () =>
+        openAddModal({
+          name: 'Emergency Fund (3 Months)',
+          targetAmount: 45000,
+          color: '#10B981',
+          icon: 'shield',
+          description: 'Safe cushion for unexpected living expenses and medical emergencies.',
+        }),
+    },
+    {
+      title: 'Vacation / Umrah Pilgrimage',
+      subtitle: 'MVR 25,000 Target',
+      badge: 'Travel',
+      icon: Plane,
+      onClick: () =>
+        openAddModal({
+          name: 'Vacation / Umrah Pilgrimage',
+          targetAmount: 25000,
+          color: '#3B82F6',
+          icon: 'plane',
+          description: 'Flights, accommodation, and travel allowance.',
+        }),
+    },
+    {
+      title: 'Workstation Tech Upgrade',
+      subtitle: 'MVR 30,000 Target',
+      badge: 'Productivity',
+      icon: Laptop,
+      onClick: () =>
+        openAddModal({
+          name: 'Workstation Tech Upgrade',
+          targetAmount: 30000,
+          color: '#8B5CF6',
+          icon: 'laptop',
+          description: 'MacBook/PC upgrade, monitor, and desk setup.',
+        }),
+    },
+    {
+      title: 'Vehicle Down Payment',
+      subtitle: 'MVR 20,000 Target',
+      badge: 'Asset',
+      icon: Car,
+      onClick: () =>
+        openAddModal({
+          name: 'Vehicle Down Payment',
+          targetAmount: 20000,
+          color: '#F59E0B',
+          icon: 'car',
+          description: 'Initial deposit for scooter or vehicle financing.',
+        }),
+    },
+  ];
 
   const openEditModal = (goal: GoalWithMetrics) => {
     setEditingGoal(goal);
@@ -213,210 +284,227 @@ export default function GoalsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-white/[0.06]">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white font-display">
+          <h1 className="text-xl sm:text-2xl font-bold text-white font-display tracking-tight">
             Savings Goals & Milestones
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
+          <p className="text-xs text-zinc-400 mt-0.5">
             Track emergency funds, travel plans, and major purchases with automated milestone tracking.
           </p>
         </div>
 
-        <Button size="sm" onClick={openAddModal}>
-          <Plus className="w-4 h-4" /> New Savings Goal
+        <Button size="sm" onClick={() => openAddModal()}>
+          <Plus className="w-3.5 h-3.5" /> New Savings Goal
         </Button>
       </div>
 
       {/* Summary Banner */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4">
-        <Card className="p-3.5 sm:p-5">
-          <p className="text-[11px] sm:text-xs uppercase tracking-wider text-slate-400">Total Saved Across Goals</p>
-          <p className="text-xl sm:text-2xl font-extrabold text-emerald-400 mt-1 truncate">
-            {formatCurrency(summary.totalSaved, currency, hide)}
+        <Card className="p-4 flex flex-col justify-between">
+          <span className="text-xs font-medium text-zinc-400">Total Saved Across Goals</span>
+          <p className="text-lg sm:text-xl font-bold text-emerald-400 font-display tabular-nums mt-1 truncate">
+            <AnimatedNumber value={summary.totalSaved} currency={currency} hide={hide} />
           </p>
         </Card>
-        <Card className="p-3.5 sm:p-5">
-          <p className="text-[11px] sm:text-xs uppercase tracking-wider text-slate-400">Combined Target</p>
-          <p className="text-xl sm:text-2xl font-extrabold text-white mt-1 truncate">
-            {formatCurrency(summary.totalTarget, currency, hide)}
+        <Card className="p-4 flex flex-col justify-between">
+          <span className="text-xs font-medium text-zinc-400">Combined Target</span>
+          <p className="text-lg sm:text-xl font-bold text-white font-display tabular-nums mt-1 truncate">
+            <AnimatedNumber value={summary.totalTarget} currency={currency} hide={hide} />
           </p>
         </Card>
-        <Card className="p-3.5 sm:p-5">
-          <p className="text-[11px] sm:text-xs uppercase tracking-wider text-slate-400">Overall Completion</p>
+        <Card className="p-4 flex flex-col justify-between">
+          <span className="text-xs font-medium text-zinc-400">Overall Completion</span>
           <div className="flex items-center gap-3 mt-1">
-            <p className="text-xl sm:text-2xl font-extrabold text-violet-400">{summary.overallPercentage}%</p>
-            <ProgressBar value={summary.overallPercentage} color="#8B5CF6" height="h-2.5" />
+            <p className="text-lg sm:text-xl font-bold text-indigo-400 font-display tabular-nums">
+              <AnimatedNumber value={summary.overallPercentage} suffix="%" />
+            </p>
+            <ProgressBar value={summary.overallPercentage} color="#6366F1" height="h-2" />
           </div>
         </Card>
       </div>
 
-      {/* Goals Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-        {goals.map((goal) => {
-          const radius = 32;
-          const circumference = 2 * Math.PI * radius;
-          const pct = goal.percentage || 0;
-          const strokeDashoffset =
-            circumference - (Math.min(100, pct) / 100) * circumference;
+      {/* Goals Grid or Rich Empty State */}
+      {goals.length === 0 ? (
+        <EmptyState
+          icon={Target}
+          title="No savings goals established yet"
+          description="Create custom milestone targets to systematically fund your savings priorities."
+          templatesTitle="Popular savings goal templates:"
+          templates={goalTemplates}
+          action={
+            <Button size="sm" onClick={() => openAddModal()}>
+              <Plus className="w-4 h-4" /> Create Custom Goal
+            </Button>
+          }
+        />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+          {goals.map((goal) => {
+            const radius = 32;
+            const circumference = 2 * Math.PI * radius;
+            const pct = goal.percentage || 0;
+            const strokeDashoffset =
+              circumference - (Math.min(100, pct) / 100) * circumference;
 
-          return (
-            <Card key={goal.id} className="p-4 sm:p-5 flex flex-col justify-between gap-4 sm:gap-5">
-              <div>
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    {/* Circular Progress Ring */}
-                    <div className="relative w-20 h-20 flex items-center justify-center shrink-0">
-                      <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
-                        <circle
-                          cx="40"
-                          cy="40"
-                          r={radius}
-                          stroke="rgba(255,255,255,0.08)"
-                          strokeWidth="7"
-                          fill="transparent"
-                        />
-                        <circle
-                          cx="40"
-                          cy="40"
-                          r={radius}
-                          stroke={goal.color || '#8B5CF6'}
-                          strokeWidth="7"
-                          strokeDasharray={circumference}
-                          strokeDashoffset={strokeDashoffset}
-                          strokeLinecap="round"
-                          fill="transparent"
-                        />
-                      </svg>
-                      <span className="absolute text-xs font-extrabold text-white">
-                        {pct}%
+            return (
+              <Card key={goal.id} className="p-4 sm:p-5 flex flex-col justify-between gap-4 sm:gap-5">
+                <div>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      {/* Circular Progress Ring */}
+                      <div className="relative w-20 h-20 flex items-center justify-center shrink-0">
+                        <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
+                          <circle
+                            cx="40"
+                            cy="40"
+                            r={radius}
+                            stroke="rgba(255,255,255,0.08)"
+                            strokeWidth="7"
+                            fill="transparent"
+                          />
+                          <circle
+                            cx="40"
+                            cy="40"
+                            r={radius}
+                            stroke={goal.color || '#8B5CF6'}
+                            strokeWidth="7"
+                            strokeDasharray={circumference}
+                            strokeDashoffset={strokeDashoffset}
+                            strokeLinecap="round"
+                            fill="transparent"
+                          />
+                        </svg>
+                        <span className="absolute text-xs font-extrabold text-white">
+                          <AnimatedNumber value={pct} suffix="%" />
+                        </span>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-lg font-bold text-white">{goal.name}</h3>
+                          {pct >= 100 && <Badge variant="success">Completed!</Badge>}
+                        </div>
+                        {goal.description && (
+                          <p className="text-xs text-slate-400 mt-0.5">{goal.description}</p>
+                        )}
+                        {goal.targetDate && (
+                          <p className="text-xs text-violet-300 mt-1.5 flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5" /> Target:{' '}
+                            {formatDate(goal.targetDate, user?.dateFormat)} ({goal.daysRemaining} days
+                            left)
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => openEditModal(goal)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.07] cursor-pointer"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget(goal)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Financial Progress Numbers */}
+                  <div className="grid grid-cols-3 gap-2 mt-5 p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06] text-center">
+                    <div>
+                      <span className="text-[11px] text-slate-400 block">Current Saved</span>
+                      <span className="text-sm font-extrabold text-emerald-400">
+                        <AnimatedNumber value={goal.currentAmount} currency={currency} hide={hide} />
                       </span>
                     </div>
-
                     <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-lg font-bold text-white">{goal.name}</h3>
-                        {pct >= 100 && <Badge variant="success">Completed!</Badge>}
-                      </div>
-                      {goal.description && (
-                        <p className="text-xs text-slate-400 mt-0.5">{goal.description}</p>
-                      )}
-                      {goal.targetDate && (
-                        <p className="text-xs text-violet-300 mt-1.5 flex items-center gap-1">
-                          <Calendar className="w-3.5 h-3.5" /> Target:{' '}
-                          {formatDate(goal.targetDate, user?.dateFormat)} ({goal.daysRemaining} days
-                          left)
-                        </p>
-                      )}
+                      <span className="text-[11px] text-slate-400 block">Target Amount</span>
+                      <span className="text-sm font-extrabold text-white">
+                        <AnimatedNumber value={goal.targetAmount} currency={currency} hide={hide} />
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[11px] text-slate-400 block">Remaining</span>
+                      <span className="text-sm font-extrabold text-violet-300">
+                        <AnimatedNumber value={goal.remainingAmount ?? 0} currency={currency} hide={hide} />
+                      </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => openEditModal(goal)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.07] cursor-pointer"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setDeleteTarget(goal)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Financial Progress Numbers */}
-                <div className="grid grid-cols-3 gap-2 mt-5 p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06] text-center">
-                  <div>
-                    <span className="text-[11px] text-slate-400 block">Current Saved</span>
-                    <span className="text-sm font-extrabold text-emerald-400">
-                      {formatCurrency(goal.currentAmount, currency, hide)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-slate-400 block">Target Amount</span>
-                    <span className="text-sm font-extrabold text-white">
-                      {formatCurrency(goal.targetAmount, currency, hide)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-slate-400 block">Remaining</span>
-                    <span className="text-sm font-extrabold text-violet-300">
-                      {formatCurrency(goal.remainingAmount, currency, hide)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Milestones Strip */}
-                {goal.milestones && goal.milestones.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-2">
-                      Milestones
-                    </p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {goal.milestones.map((m: Milestone, i: number) => (
-                        <div
-                          key={i}
-                          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl border text-xs ${
-                            m.reached
-                              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-                              : 'bg-white/[0.02] border-white/[0.06] text-slate-400'
-                          }`}
-                        >
-                          <CheckCircle2
-                            className={`w-3.5 h-3.5 shrink-0 ${
-                              m.reached ? 'text-emerald-400' : 'text-slate-600'
+                  {/* Milestones Strip */}
+                  {goal.milestones && goal.milestones.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-2">
+                        Milestones
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {goal.milestones.map((m: Milestone, i: number) => (
+                          <div
+                            key={i}
+                            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl border text-xs ${
+                              m.reached
+                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                                : 'bg-white/[0.02] border-white/[0.06] text-slate-400'
                             }`}
-                          />
-                          <span className="truncate">{m.label}</span>
-                        </div>
-                      ))}
+                          >
+                            <CheckCircle2
+                              className={`w-3.5 h-3.5 shrink-0 ${
+                                m.reached ? 'text-emerald-400' : 'text-slate-600'
+                              }`}
+                            />
+                            <span className="truncate">{m.label}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
 
-              {/* Action Buttons: Add Money / Withdraw */}
-              <div className="flex items-center gap-3 pt-3 border-t border-white/[0.07]">
-                <Button
-                  variant="emerald"
-                  size="sm"
-                  className="flex-1"
-                  onClick={() =>
-                    setContributeModal({
-                      isOpen: true,
-                      goal,
-                      action: 'ADD',
-                      amount: '',
-                      accountId: '',
-                    })
-                  }
-                >
-                  <ArrowDownLeft className="w-4 h-4" /> + Add Money
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="flex-1"
-                  onClick={() =>
-                    setContributeModal({
-                      isOpen: true,
-                      goal,
-                      action: 'WITHDRAW',
-                      amount: '',
-                      accountId: '',
-                    })
-                  }
-                >
-                  <ArrowUpRight className="w-4 h-4" /> Withdraw
-                </Button>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
+                {/* Action Buttons: Add Money / Withdraw */}
+                <div className="flex items-center gap-3 pt-3 border-t border-white/[0.07]">
+                  <Button
+                    variant="emerald"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() =>
+                      setContributeModal({
+                        isOpen: true,
+                        goal,
+                        action: 'ADD',
+                        amount: '',
+                        accountId: '',
+                      })
+                    }
+                  >
+                    <ArrowDownLeft className="w-4 h-4" /> + Add Money
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() =>
+                      setContributeModal({
+                        isOpen: true,
+                        goal,
+                        action: 'WITHDRAW',
+                        amount: '',
+                        accountId: '',
+                      })
+                    }
+                  >
+                    <ArrowUpRight className="w-4 h-4" /> Withdraw
+                  </Button>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {/* Add / Withdraw Money Modal */}
       <Modal
@@ -462,7 +550,7 @@ export default function GoalsPage() {
               <option value="">Goal balance only (do not change bank account)</option>
               {accounts.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.name} (${a.balance})
+                  {a.name} ({a.currency} {a.balance}){a.isDefault ? ' ★ Default' : ''}
                 </option>
               ))}
             </select>

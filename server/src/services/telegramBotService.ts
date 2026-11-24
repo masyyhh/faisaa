@@ -3,6 +3,7 @@ import prisma from '../prisma/client.js';
 import { sendTelegramMessageRaw } from './telegramService.js';
 import { getBriefingData, formatBriefingMarkdown } from './briefingService.js';
 import { decrypt } from '../utils/crypto.js';
+import { DEFAULT_USD_TO_MVR_RATE } from '../utils/currency.js';
 
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
   'Food & Dining': [
@@ -64,7 +65,8 @@ export interface ParsedExpense {
 export function parseExpenseText(
   text: string = '',
   accounts: Account[] = [],
-  categories: Category[] = []
+  categories: Category[] = [],
+  pastPayeeMap?: Record<string, string>
 ): ParsedExpense | null {
   const clean = text.trim();
   if (!clean) return null;
@@ -108,9 +110,11 @@ export function parseExpenseText(
     }
   }
 
-  // Fallback to currency-matching account or first active account
+  // Fallback to default account (matching currency first, then any default), or active currency-matching account
   if (!targetAccount) {
     targetAccount =
+      accounts.find((a) => a.isDefault && a.currency === currency && a.isActive) ||
+      accounts.find((a) => a.isDefault && a.isActive) ||
       accounts.find((a) => a.currency === currency && a.isActive) ||
       accounts.find((a) => a.isActive) ||
       accounts[0] ||
@@ -122,12 +126,30 @@ export function parseExpenseText(
   const lowerText = normalized.toLowerCase();
   let matchedCategoryId: string | null = null;
 
-  for (const [catName, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
-    if (keywords.some((kw) => lowerText.includes(kw))) {
-      const foundCat = categories.find((c) => c.name.toLowerCase() === catName.toLowerCase());
-      if (foundCat) {
-        matchedCategoryId = foundCat.id;
-        break;
+  // 1. Check user's past payee associations
+  if (pastPayeeMap && remainder) {
+    const cleanRemainder = remainder.toLowerCase().trim();
+    if (pastPayeeMap[cleanRemainder]) {
+      matchedCategoryId = pastPayeeMap[cleanRemainder];
+    } else {
+      for (const [p, cId] of Object.entries(pastPayeeMap)) {
+        if (cleanRemainder.includes(p) || p.includes(cleanRemainder)) {
+          matchedCategoryId = cId;
+          break;
+        }
+      }
+    }
+  }
+
+  // 2. Keyword heuristics
+  if (!matchedCategoryId) {
+    for (const [catName, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+      if (keywords.some((kw) => lowerText.includes(kw))) {
+        const foundCat = categories.find((c) => c.name.toLowerCase() === catName.toLowerCase());
+        if (foundCat) {
+          matchedCategoryId = foundCat.id;
+          break;
+        }
       }
     }
   }
@@ -388,7 +410,7 @@ export async function handleTelegramWebhookUpdate(
       else mvrTotal += acc.balance;
     }
 
-    const rate = user.usdToMvrRate || 18.45;
+    const rate = user.usdToMvrRate || DEFAULT_USD_TO_MVR_RATE;
     const netMvr = mvrTotal + usdTotal * rate;
 
     msg += `\n*Total Liquid:* MVR ${netMvr.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -426,7 +448,7 @@ export async function handleTelegramWebhookUpdate(
       const sign = tx.type === 'INCOME' ? '+' : '-';
       msg += `• ${sign}*${tx.currency} ${tx.amount.toFixed(2)}* — ${tx.payee} _(${tx.category?.name || tx.account.name})_\n`;
       if (tx.type === 'EXPENSE') {
-        const amtMvr = tx.currency === 'USD' ? tx.amount * (user.usdToMvrRate || 18.45) : tx.amount;
+        const amtMvr = tx.currency === 'USD' ? tx.amount * (user.usdToMvrRate || DEFAULT_USD_TO_MVR_RATE) : tx.amount;
         totalExpenseMvr += amtMvr;
       }
     }
@@ -477,8 +499,21 @@ export async function handleTelegramWebhookUpdate(
     return { handled: true };
   }
 
-  // 5. Natural Expense / Income Parsing
-  const parsed = parseExpenseText(text, user.accounts, user.categories);
+  // 5. Natural Expense / Income Parsing with historical memory
+  const recentTxs = await prisma.transaction.findMany({
+    where: { userId: user.id, categoryId: { not: null } },
+    orderBy: { date: 'desc' },
+    take: 60,
+    select: { payee: true, categoryId: true },
+  });
+  const pastPayeeMap: Record<string, string> = {};
+  for (const t of recentTxs) {
+    if (t.payee && t.categoryId) {
+      pastPayeeMap[t.payee.toLowerCase().trim()] = t.categoryId;
+    }
+  }
+
+  const parsed = parseExpenseText(text, user.accounts, user.categories, pastPayeeMap);
   if (!parsed || !parsed.targetAccount) {
     await safeSend(chatId,
       `❓ Could not understand "${text}".\n\nTry typing: \`50 coffee\` or \`120 lunch bml\` or type \`/help\` for examples.`
@@ -510,7 +545,7 @@ export async function handleTelegramWebhookUpdate(
           type: parsed.type,
           amount: parsed.amount,
           currency: parsed.currency,
-          exchangeRateUsed: user.usdToMvrRate || 18.45,
+          exchangeRateUsed: user.usdToMvrRate || DEFAULT_USD_TO_MVR_RATE,
           payee: parsed.payee,
           description: parsed.description,
           date: new Date(),

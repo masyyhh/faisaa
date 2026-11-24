@@ -7,6 +7,9 @@ import {
   Edit3,
   Trash2,
   Zap,
+  Wifi,
+  Droplet,
+  Tv,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api, { Bill, Account, Category } from '../services/api';
@@ -17,9 +20,11 @@ import {
   Modal,
   ConfirmDialog,
   LoadingState,
+  EmptyState,
   Skeleton,
   SkeletonCard,
   SkeletonMetric,
+  AnimatedNumber,
 } from '../components/ui';
 import { formatCurrency, formatDate } from '../utils/formatters';
 
@@ -79,21 +84,86 @@ export default function BillsPage() {
     loadBills();
   }, [loadBills, refreshTrigger]);
 
-  const openAddModal = () => {
+  const openAddModal = (preset?: {
+    name?: string;
+    amount?: number;
+    frequency?: string;
+    isSubscription?: boolean;
+    autoPay?: boolean;
+  }) => {
     setEditingBill(null);
     setForm({
-      name: '',
-      amount: '',
-      frequency: 'MONTHLY',
+      name: preset?.name || '',
+      amount: preset?.amount ? String(preset.amount) : '',
+      frequency: preset?.frequency || 'MONTHLY',
       dueDate: new Date().toISOString().split('T')[0],
-      accountId: accounts[0]?.id || '',
+      accountId: accounts.find((a) => a.isDefault)?.id || accounts[0]?.id || '',
       categoryId: categories[0]?.id || '',
-      isSubscription: true,
-      autoPay: true,
+      isSubscription: preset?.isSubscription !== undefined ? preset.isSubscription : true,
+      autoPay: preset?.autoPay !== undefined ? preset.autoPay : true,
       notes: '',
     });
     setModalOpen(true);
   };
+
+  const billTemplates = [
+    {
+      title: 'Dhiraagu / Ooredoo Internet',
+      subtitle: 'MVR 850 / mo',
+      badge: 'Utility',
+      icon: Wifi,
+      onClick: () =>
+        openAddModal({
+          name: 'Home Fibre Internet',
+          amount: 850,
+          frequency: 'MONTHLY',
+          isSubscription: true,
+          autoPay: true,
+        }),
+    },
+    {
+      title: 'STELCO Electricity Bill',
+      subtitle: 'MVR 1,200 / mo',
+      badge: 'Essential',
+      icon: Zap,
+      onClick: () =>
+        openAddModal({
+          name: 'STELCO Electricity',
+          amount: 1200,
+          frequency: 'MONTHLY',
+          isSubscription: false,
+          autoPay: false,
+        }),
+    },
+    {
+      title: 'MWSC Water Supply',
+      subtitle: 'MVR 350 / mo',
+      badge: 'Utility',
+      icon: Droplet,
+      onClick: () =>
+        openAddModal({
+          name: 'MWSC Water Bill',
+          amount: 350,
+          frequency: 'MONTHLY',
+          isSubscription: false,
+          autoPay: false,
+        }),
+    },
+    {
+      title: 'Netflix / MediaNet',
+      subtitle: 'MVR 250 / mo',
+      badge: 'Entertainment',
+      icon: Tv,
+      onClick: () =>
+        openAddModal({
+          name: 'Netflix / Streaming',
+          amount: 250,
+          frequency: 'MONTHLY',
+          isSubscription: true,
+          autoPay: true,
+        }),
+    },
+  ];
 
   const openEditModal = (bill: Bill) => {
     setEditingBill(bill);
@@ -188,31 +258,31 @@ export default function BillsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-white/[0.06]">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white font-display">
+          <h1 className="text-xl sm:text-2xl font-bold text-white font-display tracking-tight">
             Bills & Subscriptions
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
+          <p className="text-xs text-zinc-400 mt-0.5">
             Monitor fixed monthly commitments, upcoming due dates, and active streaming/software subscriptions.
           </p>
         </div>
 
-        <Button size="sm" onClick={openAddModal}>
-          <Plus className="w-4 h-4" /> Add Bill / Subscription
+        <Button size="sm" onClick={() => openAddModal()}>
+          <Plus className="w-3.5 h-3.5" /> Add Bill / Subscription
         </Button>
       </div>
 
       {/* Overdue Warning Banner */}
       {summary.overdueCount > 0 && (
-        <div className="p-4 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-between gap-4">
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
             <div>
-              <p className="text-sm font-bold text-white">
+              <p className="text-xs sm:text-sm font-semibold text-white">
                 Action Required: {summary.overdueCount} Overdue Bill(s)
               </p>
-              <p className="text-xs text-rose-200/80">
+              <p className="text-xs text-zinc-400">
                 Review overdue payments below and click "Mark as Paid" once settled.
               </p>
             </div>
@@ -225,55 +295,55 @@ export default function BillsPage() {
 
       {/* KPI Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
-        <Card className="p-3.5 sm:p-5">
-          <p className="text-[11px] sm:text-xs uppercase tracking-wider text-slate-400">Monthly Recurring Cost</p>
-          <p className="text-xl sm:text-2xl font-extrabold text-white mt-1 truncate">
-            {formatCurrency(summary.monthlyRecurringCost, currency, hide)}
+        <Card className="p-4 flex flex-col justify-between">
+          <span className="text-xs font-medium text-zinc-400">Monthly Burn</span>
+          <p className="text-lg sm:text-xl font-bold text-white font-display tabular-nums mt-1 truncate">
+            <AnimatedNumber value={summary.monthlyRecurringCost} currency={currency} hide={hide} />
           </p>
-          <span className="text-[11px] sm:text-xs text-slate-400 mt-1 block truncate">Normalized monthly burn</span>
+          <span className="text-[11px] text-zinc-500 mt-0.5 block truncate">Normalized monthly cost</span>
         </Card>
 
-        <Card className="p-3.5 sm:p-5">
-          <p className="text-[11px] sm:text-xs uppercase tracking-wider text-slate-400">Yearly Recurring Cost</p>
-          <p className="text-xl sm:text-2xl font-extrabold text-violet-400 mt-1 truncate">
-            {formatCurrency(summary.yearlyRecurringCost, currency, hide)}
+        <Card className="p-4 flex flex-col justify-between">
+          <span className="text-xs font-medium text-zinc-400">Yearly Total</span>
+          <p className="text-lg sm:text-xl font-bold text-indigo-400 font-display tabular-nums mt-1 truncate">
+            <AnimatedNumber value={summary.yearlyRecurringCost} currency={currency} hide={hide} />
           </p>
-          <span className="text-[11px] sm:text-xs text-slate-400 mt-1 block truncate">12-month annualized total</span>
+          <span className="text-[11px] text-zinc-500 mt-0.5 block truncate">Annualized recurring</span>
         </Card>
 
-        <Card className="p-3.5 sm:p-5">
-          <p className="text-[11px] sm:text-xs uppercase tracking-wider text-slate-400">Active Subscriptions</p>
-          <p className="text-xl sm:text-2xl font-extrabold text-cyan-400 mt-1 truncate">
-            {summary.subscriptionCount} Active
+        <Card className="p-4 flex flex-col justify-between">
+          <span className="text-xs font-medium text-zinc-400">Active Plans</span>
+          <p className="text-lg sm:text-xl font-bold text-sky-400 font-display tabular-nums mt-1 truncate">
+            <AnimatedNumber value={summary.subscriptionCount} /> Active
           </p>
-          <span className="text-[11px] sm:text-xs text-slate-400 mt-1 block truncate">Digital & recurring plans</span>
+          <span className="text-[11px] text-zinc-500 mt-0.5 block truncate">Digital subscriptions</span>
         </Card>
 
-        <Card className="p-3.5 sm:p-5">
-          <p className="text-[11px] sm:text-xs uppercase tracking-wider text-slate-400">Upcoming & Overdue</p>
-          <p className="text-xl sm:text-2xl font-extrabold text-amber-400 mt-1 truncate">
-            {summary.upcomingCount} Due • {summary.overdueCount} Late
+        <Card className="p-4 flex flex-col justify-between">
+          <span className="text-xs font-medium text-zinc-400">Upcoming & Overdue</span>
+          <p className="text-lg sm:text-xl font-bold text-amber-400 font-display tabular-nums mt-1 truncate">
+            <AnimatedNumber value={summary.upcomingCount} /> Due • <AnimatedNumber value={summary.overdueCount} /> Late
           </p>
-          <span className="text-[11px] sm:text-xs text-slate-400 mt-1 block truncate">Next 30 days cycle</span>
+          <span className="text-[11px] text-zinc-500 mt-0.5 block truncate">Next 30 days</span>
         </Card>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
+      {/* Segmented Filter Control */}
+      <div className="inline-flex p-1 rounded-xl bg-white/[0.03] border border-white/[0.06] gap-1 overflow-x-auto no-scrollbar">
         {[
           { id: 'ALL', label: `All (${bills.length})` },
           { id: 'UPCOMING', label: `Upcoming (${summary.upcomingCount})` },
           { id: 'OVERDUE', label: `Overdue (${summary.overdueCount})` },
           { id: 'PAID', label: 'Paid' },
-          { id: 'SUBSCRIPTIONS', label: 'Subscriptions Only' },
+          { id: 'SUBSCRIPTIONS', label: 'Subscriptions' },
         ].map((t) => (
           <button
             key={t.id}
             onClick={() => setFilterTab(t.id)}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 whitespace-nowrap cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 whitespace-nowrap cursor-pointer ${
               filterTab === t.id
-                ? 'bg-violet-600 text-white'
-                : 'bg-white/[0.04] text-slate-400 hover:text-white'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-zinc-400 hover:text-white'
             }`}
           >
             {t.label}
@@ -281,86 +351,105 @@ export default function BillsPage() {
         ))}
       </div>
 
-      {/* Bills List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredBills.map((bill) => (
-          <Card key={bill.id} className="flex flex-col justify-between gap-4">
-            <div>
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-base font-bold text-white">{bill.name}</h3>
-                    {bill.autoPay && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-300">
-                        <Zap className="w-2.5 h-2.5" /> AutoPay
-                      </span>
-                    )}
+      {/* Bills List or Rich Empty State */}
+      {filteredBills.length === 0 ? (
+        <EmptyState
+          icon={Calendar}
+          title={filterTab === 'ALL' ? 'No recurring bills or subscriptions' : `No ${filterTab.toLowerCase()} bills found`}
+          description={
+            filterTab === 'ALL'
+              ? 'Never miss an internet, utility, or subscription renewal by setting up your recurring payments.'
+              : 'Clear your filters or add a new recurring payment schedule.'
+          }
+          templatesTitle={filterTab === 'ALL' ? 'Quick-add utility & subscription templates:' : undefined}
+          templates={filterTab === 'ALL' ? billTemplates : undefined}
+          action={
+            <Button size="sm" onClick={() => openAddModal()}>
+              <Plus className="w-4 h-4" /> Add Bill / Subscription
+            </Button>
+          }
+        />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
+          {filteredBills.map((bill) => (
+            <Card key={bill.id} className="flex flex-col justify-between gap-4">
+              <div>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <h3 className="text-sm sm:text-base font-semibold text-white">{bill.name}</h3>
+                      {bill.autoPay && (
+                        <span className="inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.2 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          <Zap className="w-2.5 h-2.5" /> AutoPay
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      {bill.category?.name || 'Utilities'} • {bill.account?.name || 'Primary'}
+                    </p>
                   </div>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    {bill.category?.name || 'Utilities'} • {bill.account?.name || 'Primary'}
-                  </p>
+
+                  <Badge
+                    variant={
+                      bill.status === 'OVERDUE'
+                        ? 'danger'
+                        : bill.status === 'PAID'
+                        ? 'success'
+                        : 'warning'
+                    }
+                  >
+                    {bill.status}
+                  </Badge>
                 </div>
 
-                <Badge
-                  variant={
-                    bill.status === 'OVERDUE'
-                      ? 'danger'
-                      : bill.status === 'PAID'
-                      ? 'success'
-                      : 'warning'
-                  }
-                >
-                  {bill.status}
-                </Badge>
-              </div>
-
-              <div className="mt-4 flex items-baseline justify-between">
-                <p className="text-2xl font-extrabold text-white font-display">
-                  {formatCurrency(bill.amount, currency, hide)}
-                  <span className="text-xs font-normal text-slate-400 ml-1">
-                    / {bill.frequency.toLowerCase()}
+                <div className="mt-4 flex items-baseline justify-between">
+                  <p className="text-xl sm:text-2xl font-bold text-white font-display tabular-nums">
+                    <AnimatedNumber value={bill.amount} currency={currency} hide={hide} />
+                    <span className="text-xs font-normal text-zinc-500 ml-1">
+                      / {bill.frequency.toLowerCase()}
+                    </span>
+                  </p>
+                  <span className="text-xs text-zinc-400 flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                    Due {formatDate(bill.dueDate, user?.dateFormat)}
                   </span>
-                </p>
-                <span className="text-xs text-slate-400 flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5 text-violet-400" />
-                  Due {formatDate(bill.dueDate, user?.dateFormat)}
-                </span>
+                </div>
               </div>
-            </div>
 
-            <div className="flex items-center justify-between gap-2 pt-3 border-t border-white/[0.06]">
-              {bill.status !== 'PAID' ? (
-                <Button
-                  variant="emerald"
-                  size="sm"
-                  onClick={() => handleMarkPaid(bill)}
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Mark as Paid
-                </Button>
-              ) : (
-                <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
-                  <CheckCircle2 className="w-4 h-4" /> Settled for cycle
-                </span>
-              )}
+              <div className="flex items-center justify-between gap-2 pt-3 border-t border-white/[0.06]">
+                {bill.status !== 'PAID' ? (
+                  <Button
+                    variant="emerald"
+                    size="sm"
+                    onClick={() => handleMarkPaid(bill)}
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Mark as Paid
+                  </Button>
+                ) : (
+                  <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
+                    <CheckCircle2 className="w-4 h-4" /> Settled for cycle
+                  </span>
+                )}
 
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => openEditModal(bill)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.07] cursor-pointer"
-                >
-                  <Edit3 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setDeleteTarget(bill)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => openEditModal(bill)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.07] cursor-pointer"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setDeleteTarget(bill)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-            </div>
-          </Card>
-        ))}
-      </div>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Add / Edit Bill Modal */}
       <Modal
@@ -432,7 +521,7 @@ export default function BillsPage() {
               >
                 {accounts.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name}
+                    {a.name}{a.isDefault ? ' ★ Default' : ''}
                   </option>
                 ))}
               </select>

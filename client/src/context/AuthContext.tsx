@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import api, { type User } from '../services/api';
+import api, { type User, setAuthToken } from '../services/api';
 
 export interface Toast {
   id: number;
@@ -19,6 +19,7 @@ export interface AuthContextType {
   login: (identifier: string, password: string) => Promise<User>;
   register: (payload: any) => Promise<User>;
   logout: () => Promise<void>;
+  deleteAccount: (password: string) => Promise<void>;
   updateProfile: (updates: Partial<User>) => Promise<User>;
   toggleHideBalances: () => Promise<void>;
   addToast: (message: string, type?: 'success' | 'error' | 'info') => void;
@@ -87,8 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         applyTheme(data.user.theme || 'dark');
       }
     } catch {
-      localStorage.removeItem('faisaa_token');
-      localStorage.removeItem('finora_token');
+      setAuthToken(null);
       setUser(null);
     } finally {
       setLoading(false);
@@ -106,8 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       identifier,
       password,
     });
-    localStorage.setItem('faisaa_token', data.token);
-    localStorage.removeItem('finora_token');
+    setAuthToken(data.token || null);
     setUser(data.user);
     applyTheme(data.user.theme || 'dark');
     addToast(`Welcome back, ${data.user.firstName}!`, 'success');
@@ -116,8 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (payload: any): Promise<User> => {
     const { data } = await api.post('/auth/register', payload);
-    localStorage.setItem('faisaa_token', data.token);
-    localStorage.removeItem('finora_token');
+    setAuthToken(data.token || null);
     setUser(data.user);
     applyTheme(data.user.theme || 'dark');
     addToast(`Welcome to Faisaa, ${data.user.firstName}!`, 'success');
@@ -130,10 +128,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // Ignore network errors on logout
     }
-    localStorage.removeItem('faisaa_token');
-    localStorage.removeItem('finora_token');
+    setAuthToken(null);
     setUser(null);
     addToast('Signed out safely.', 'info');
+  };
+
+  const deleteAccount = async (password: string): Promise<void> => {
+    await api.delete('/auth/account', { data: { password } });
+    setAuthToken(null);
+    setUser(null);
+    addToast('Your account and financial data have been permanently deleted.', 'info');
   };
 
   const updateProfile = async (updates: Partial<User>): Promise<User> => {
@@ -183,6 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         register,
         logout,
+        deleteAccount,
         updateProfile,
         toggleHideBalances,
         addToast,

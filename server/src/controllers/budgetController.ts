@@ -97,7 +97,7 @@ export async function getBudgets(req: Request, res: Response, next: NextFunction
       const budgetedSum =
         monthBudgets.length > 0
           ? monthBudgets.reduce((s, b) => s + b.amount, 0)
-          : totalBudgeted || 4140;
+          : (totalBudgeted || 0);
 
       const spentSum = sixMonthExpenses
         .filter((tx) => {
@@ -211,6 +211,19 @@ export async function updateBudget(req: Request, res: Response, next: NextFuncti
     }
 
     const parsed = budgetSchema.partial().parse(req.body);
+
+    if (parsed.categoryId) {
+      const cat = await prisma.category.findFirst({
+        where: { id: parsed.categoryId, userId: req.user!.id },
+      });
+      if (!cat) {
+        res.status(403).json({
+          success: false,
+          message: 'Selected category not found or unauthorized.',
+        });
+        return;
+      }
+    }
 
     if (parsed.categoryId && parsed.categoryId !== existing.categoryId) {
       const duplicate = await prisma.budget.findFirst({

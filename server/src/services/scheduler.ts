@@ -53,12 +53,7 @@ export async function runScheduledTasks(): Promise<void> {
       const telegramUsers = await prisma.user.findMany({
         where: {
           telegramEnabled: true,
-          OR: [
-            { telegramChatId: { not: null } },
-            { email: 'alex@faisaa.online' },
-            { email: 'alex@faisaa.io' },
-            { email: 'alex@finora.io' },
-          ],
+          telegramChatId: { not: null },
         },
         select: { id: true },
       });

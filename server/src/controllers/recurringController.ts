@@ -95,6 +95,31 @@ export async function updateRecurringTransaction(req: Request, res: Response, ne
     }
 
     const parsed = recurringSchema.partial().parse(req.body);
+
+    if (parsed.accountId) {
+      const account = await prisma.account.findFirst({
+        where: { id: parsed.accountId, userId: req.user!.id },
+      });
+      if (!account) {
+        return res.status(403).json({
+          success: false,
+          message: 'Selected account not found or unauthorized.',
+        });
+      }
+    }
+
+    if (parsed.categoryId) {
+      const category = await prisma.category.findFirst({
+        where: { id: parsed.categoryId, userId: req.user!.id },
+      });
+      if (!category) {
+        return res.status(403).json({
+          success: false,
+          message: 'Selected category not found or unauthorized.',
+        });
+      }
+    }
+
     const updated = await prisma.recurringTransaction.update({
       where: { id },
       data: {

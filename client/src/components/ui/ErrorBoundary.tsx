@@ -33,8 +33,12 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   handleResetSession = () => {
-    localStorage.removeItem('faisaa_token');
-    localStorage.removeItem('finora_token');
+    try {
+      localStorage.removeItem('faisaa_token');
+      localStorage.removeItem('finora_token');
+    } catch {
+      // Ignore
+    }
     window.location.href = '/login';
   };
 

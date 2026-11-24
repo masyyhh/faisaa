@@ -97,26 +97,29 @@ app.use(
       return callback(new Error('Blocked by CORS policy'));
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
 
 app.use(express.json({ limit: '2mb' }));
 
-// Strict rate limiter for login & registration endpoints
+// Strict rate limiter for authentication endpoints (prevent brute-force and credential stuffing)
 const authBruteForceLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 40,
+  max: 15,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
     success: false,
-    message: 'Too many authentication attempts. Please try again in 15 minutes.',
+    message: 'Too many authentication attempts from this IP. Please try again in 15 minutes.',
   },
 });
 app.use('/api/auth/login', authBruteForceLimiter);
 app.use('/api/auth/register', authBruteForceLimiter);
+app.use('/api/auth/forgot-password', authBruteForceLimiter);
+app.use('/api/auth/reset-password', authBruteForceLimiter);
+app.use('/api/auth/password', authBruteForceLimiter);
 
 // General API rate limiter
 const apiLimiter = rateLimit({
@@ -131,7 +134,7 @@ app.use('/api', apiLimiter);
 app.use('/api', apiRoutes);
 
 // Catch-all 404 for unknown /api/* endpoints
-app.use('/api/*', (req: Request, res: Response) => {
+app.use('/api', (req: Request, res: Response) => {
   res.status(404).json({
     success: false,
     message: `API endpoint not found: ${req.method} ${req.originalUrl}`,
@@ -158,7 +161,7 @@ if (fs.existsSync(clientIndexHtml)) {
     })
   );
 
-  app.get('*', (_req: Request, res: Response) => {
+  app.get('{*splat}', (_req: Request, res: Response) => {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.sendFile(clientIndexHtml);
   });

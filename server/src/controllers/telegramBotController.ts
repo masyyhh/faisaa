@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
+import crypto from 'node:crypto';
 import prisma from '../prisma/client.js';
 import { handleTelegramWebhookUpdate } from '../services/telegramBotService.js';
 import { setTelegramWebhook, getTelegramBotInfo, getTelegramWebhookInfo } from '../services/telegramService.js';
@@ -11,12 +12,26 @@ import { generateSecureOtp, decrypt } from '../utils/crypto.js';
  */
 export async function handleWebhook(req: Request, res: Response): Promise<void> {
   try {
-    // If a webhook secret token is configured in environment, verify header
-    const secretHeader = req.headers['x-telegram-bot-api-secret-token'];
+    // Verify Telegram Webhook Secret Token strictly
     const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+    if (!expectedSecret) {
+      console.warn('[TelegramWebhook] Rejected webhook request: TELEGRAM_WEBHOOK_SECRET is not configured on server.');
+      res.status(503).json({ error: 'Telegram webhook processing is not configured' });
+      return;
+    }
 
-    if (expectedSecret && secretHeader !== expectedSecret) {
-      console.warn('[TelegramWebhook] Rejected unauthorized webhook call with invalid or missing secret token.');
+    const secretHeader = req.headers['x-telegram-bot-api-secret-token'];
+    if (!secretHeader || typeof secretHeader !== 'string') {
+      console.warn('[TelegramWebhook] Rejected unauthorized webhook call: missing secret token header.');
+      res.status(401).json({ error: 'Missing webhook secret token header' });
+      return;
+    }
+
+    const headerBuf = Buffer.from(secretHeader);
+    const expectedBuf = Buffer.from(expectedSecret);
+
+    if (headerBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(headerBuf, expectedBuf)) {
+      console.warn('[TelegramWebhook] Rejected unauthorized webhook call with invalid secret token.');
       res.status(403).json({ error: 'Unauthorized webhook request' });
       return;
     }

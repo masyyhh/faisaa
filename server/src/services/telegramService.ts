@@ -2,6 +2,7 @@ import type { User } from '@prisma/client';
 import type { AuthUser } from '../middleware/auth.js';
 import prisma from '../prisma/client.js';
 import { decrypt } from '../utils/crypto.js';
+import { DEFAULT_USD_TO_MVR_RATE } from '../utils/currency.js';
 
 const BOT_TOKEN_REGEX = /^\d+:[A-Za-z0-9_-]{20,70}$/;
 const CHAT_ID_REGEX = /^-?\d{4,25}$/;
@@ -43,25 +44,18 @@ export async function sendTelegramNotification(
       return { sent: false, reason: 'Telegram notifications disabled by user' };
     }
 
-    const isDemoUser = Boolean(
-      user && (user.email === 'alex@faisaa.online' || user.email === 'alex@faisaa.io' || user.email === 'alex@finora.io')
-    );
-
     const decryptedUserToken = user?.telegramBotToken ? decrypt(user.telegramBotToken) : '';
     const decryptedOverrideToken = overrideCreds.botToken ? decrypt(overrideCreds.botToken) : '';
 
     const botToken = (
       decryptedOverrideToken?.trim() ||
       decryptedUserToken?.trim() ||
-      (isDemoUser ? process.env.TELEGRAM_BOT_TOKEN?.trim() : '') ||
       process.env.TELEGRAM_BOT_TOKEN?.trim() ||
       ''
     );
     const chatId = (
       overrideCreds.chatId?.trim() ||
       user?.telegramChatId?.trim() ||
-      (isDemoUser ? process.env.TELEGRAM_CHAT_ID?.trim() : '') ||
-      process.env.TELEGRAM_CHAT_ID?.trim() ||
       ''
     );
 
@@ -74,7 +68,7 @@ export async function sendTelegramNotification(
     }
 
     const cleanMessage = escapeMarkdown(message);
-    const text = `*Faisaa Online Alert*\n*${escapeMarkdown(title)}*\n\n${cleanMessage}\n\n_Base: MVR • Rate: 1 USD = MVR ${Number(user?.usdToMvrRate || 18.45).toFixed(2)}_`;
+    const text = `*Faisaa Online Alert*\n*${escapeMarkdown(title)}*\n\n${cleanMessage}\n\n_Base: MVR • Rate: 1 USD = MVR ${Number(user?.usdToMvrRate || DEFAULT_USD_TO_MVR_RATE).toFixed(2)}_`;
 
     return await sendTelegramMessageRaw(botToken, chatId, text);
   } catch (err: unknown) {

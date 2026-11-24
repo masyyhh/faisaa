@@ -8,6 +8,7 @@ import {
   Landmark,
   TrendingUp,
   CreditCard,
+  Star,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -30,6 +31,10 @@ import {
   Skeleton,
   SkeletonCard,
   SkeletonMetric,
+  EmptyState,
+  AnimatedNumber,
+  InstitutionLogo,
+  INSTITUTIONS,
 } from '../components/ui';
 import { formatCurrency, formatSecondaryUSD, formatDate, DynamicIcon } from '../utils/formatters';
 
@@ -74,6 +79,7 @@ export default function AccountsPage() {
     institution: '',
     lastFour: '',
     notes: '',
+    isDefault: false,
     isActive: true,
   });
 
@@ -127,22 +133,120 @@ export default function AccountsPage() {
     }
   };
 
-  const openAddModal = () => {
+  const handleSetDefaultAccount = async (accId: string, accName: string) => {
+    try {
+      await api.patch(`/accounts/${accId}/default`);
+      addToast(`"${accName}" set as default account.`, 'success');
+      triggerDataRefresh();
+    } catch (err: any) {
+      addToast(err.response?.data?.message || 'Failed to set default account.', 'error');
+    }
+  };
+
+  const openAddModal = (preset?: Partial<typeof form>) => {
     setEditingAccount(null);
     setForm({
-      name: '',
-      type: 'CHECKING',
-      balance: '',
-      currency: 'MVR',
-      color: '#8B5CF6',
-      icon: 'landmark',
-      institution: '',
-      lastFour: '',
-      notes: '',
+      name: preset?.name || '',
+      type: preset?.type || 'CHECKING',
+      balance: preset?.balance || '',
+      currency: preset?.currency || 'MVR',
+      color: preset?.color || '#8B5CF6',
+      icon: preset?.icon || 'landmark',
+      institution: preset?.institution || '',
+      lastFour: preset?.lastFour || '',
+      notes: preset?.notes || '',
+      isDefault: accounts.length === 0,
       isActive: true,
     });
     setModalOpen(true);
   };
+
+  const accountTemplates = [
+    {
+      title: 'BML Rufiyaa Checking',
+      description: 'Primary Bank of Maldives account for salary and local POS spending.',
+      badge: 'BML • MVR',
+      onClick: () =>
+        openAddModal({
+          name: 'BML Rufiyaa Account',
+          type: 'CHECKING',
+          currency: 'MVR',
+          institution: 'Bank of Maldives',
+          color: '#E11D48',
+          icon: 'landmark',
+        }),
+    },
+    {
+      title: 'BML USD Savings',
+      description: 'Foreign currency account for USD savings and international debit card payments.',
+      badge: 'BML • USD ($)',
+      onClick: () =>
+        openAddModal({
+          name: 'BML USD Savings',
+          type: 'SAVINGS',
+          currency: 'USD',
+          institution: 'Bank of Maldives',
+          color: '#0284C7',
+          icon: 'wallet',
+        }),
+    },
+    {
+      title: 'MIB Current Account',
+      description: 'Maldives Islamic Bank Shari’ah-compliant checking account.',
+      badge: 'MIB • MVR',
+      onClick: () =>
+        openAddModal({
+          name: 'MIB Account',
+          type: 'CHECKING',
+          currency: 'MVR',
+          institution: 'Maldives Islamic Bank',
+          color: '#059669',
+          icon: 'building-2',
+        }),
+    },
+    {
+      title: 'Dhiraagu Pay Digital Wallet',
+      description: 'Mobile wallet for instant local QR payments, bill settlements, and reloads.',
+      badge: 'Dhiraagu Pay',
+      onClick: () =>
+        openAddModal({
+          name: 'Dhiraagu Pay Wallet',
+          type: 'CASH',
+          currency: 'MVR',
+          institution: 'Dhiraagu Pay',
+          color: '#F97316',
+          icon: 'smartphone',
+        }),
+    },
+    {
+      title: 'Ooredoo m-Faisaa Wallet',
+      description: 'Digital mobile wallet for merchant scan-and-pay and utility vouchers.',
+      badge: 'm-Faisaa',
+      onClick: () =>
+        openAddModal({
+          name: 'm-Faisaa Wallet',
+          type: 'CASH',
+          currency: 'MVR',
+          institution: 'Ooredoo m-Faisaa',
+          color: '#DC2626',
+          icon: 'smartphone',
+        }),
+    },
+    {
+      title: 'Physical Cash Wallet',
+      description: 'Physical cash notes in pocket for cafes and local market shops.',
+      badge: 'Cash • MVR',
+      onClick: () =>
+        openAddModal({
+          name: 'Cash in Hand',
+          type: 'CASH',
+          currency: 'MVR',
+          institution: 'Cash Wallet',
+          color: '#F59E0B',
+          icon: 'banknote',
+        }),
+    },
+  ];
 
   const openEditModal = (acc: Account) => {
     setEditingAccount(acc);
@@ -156,6 +260,7 @@ export default function AccountsPage() {
       institution: acc.institution || '',
       lastFour: acc.lastFour || '',
       notes: acc.notes || '',
+      isDefault: Boolean(acc.isDefault),
       isActive: acc.isActive,
     });
     setModalOpen(true);
@@ -238,13 +343,13 @@ export default function AccountsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-white/[0.06]">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white font-display">
-            Accounts & Institutions (MVR & USD)
+          <h1 className="text-xl sm:text-2xl font-bold text-white font-display tracking-tight">
+            Accounts & Institutions
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-            Manage MVR & USD ($) accounts and convert currencies at live exchange rates ($1 = MVR {liveRate.toFixed(2)}).
+          <p className="text-xs text-zinc-400 mt-0.5">
+            Manage MVR & USD ($) accounts and convert currencies at live rate ($1 = MVR {liveRate.toFixed(2)}).
           </p>
         </div>
 
@@ -253,7 +358,6 @@ export default function AccountsPage() {
             variant="secondary"
             size="sm"
             onClick={openExchangeModal}
-            className="text-xs"
           >
             <ArrowLeftRight className="w-3.5 h-3.5 text-emerald-400" /> Exchange $ ↔ MVR
           </Button>
@@ -269,11 +373,10 @@ export default function AccountsPage() {
               });
               setTransferModalOpen(true);
             }}
-            className="text-xs"
           >
-            <ArrowLeftRight className="w-3.5 h-3.5 text-violet-400" /> Transfer Funds
+            <ArrowLeftRight className="w-3.5 h-3.5 text-indigo-400" /> Transfer Funds
           </Button>
-          <Button size="sm" onClick={openAddModal} className="text-xs">
+          <Button size="sm" onClick={openAddModal}>
             <Plus className="w-3.5 h-3.5" /> Add Account
           </Button>
         </div>
@@ -281,145 +384,207 @@ export default function AccountsPage() {
 
       {/* Summary Banner */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4">
-        <Card className="p-3.5 sm:p-5 flex items-center justify-between">
+        <Card className="p-4 flex items-center justify-between">
           <div>
-            <p className="text-[11px] sm:text-xs uppercase tracking-wider text-slate-400">Total Assets (MVR)</p>
-            <p className="text-xl sm:text-2xl font-extrabold text-emerald-400 mt-1 truncate">
-              {formatCurrency(summary.totalAssets, currency, hide)}
+            <span className="text-xs font-medium text-zinc-400">Total Assets</span>
+            <p className="text-xl sm:text-2xl font-bold text-emerald-400 font-display tabular-nums mt-1 truncate">
+              <AnimatedNumber value={summary.totalAssets} currency={currency} hide={hide} />
             </p>
-            <p className="text-[11px] sm:text-xs font-semibold text-slate-400 mt-0.5">
-              {formatSecondaryUSD(summary.totalAssets, liveRate, hide)} USD
+            <p className="text-xs text-zinc-500 tabular-nums mt-0.5">
+              ≈ $<AnimatedNumber value={summary.totalAssets / liveRate} hide={hide} /> USD
             </p>
           </div>
-          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
-            <Landmark className="w-5 h-5" />
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+            <Landmark className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
         </Card>
 
-        <Card className="p-3.5 sm:p-5 flex items-center justify-between">
+        <Card className="p-4 flex items-center justify-between">
           <div>
-            <p className="text-[11px] sm:text-xs uppercase tracking-wider text-slate-400">Total Liabilities (MVR)</p>
-            <p className="text-xl sm:text-2xl font-extrabold text-rose-400 mt-1 truncate">
-              {formatCurrency(summary.totalLiabilities, currency, hide)}
+            <span className="text-xs font-medium text-zinc-400">Total Liabilities</span>
+            <p className="text-xl sm:text-2xl font-bold text-rose-400 font-display tabular-nums mt-1 truncate">
+              <AnimatedNumber value={summary.totalLiabilities} currency={currency} hide={hide} />
             </p>
-            <p className="text-[11px] sm:text-xs font-semibold text-slate-400 mt-0.5">
-              {formatSecondaryUSD(summary.totalLiabilities, liveRate, hide)} USD
+            <p className="text-xs text-zinc-500 tabular-nums mt-0.5">
+              ≈ $<AnimatedNumber value={summary.totalLiabilities / liveRate} hide={hide} /> USD
             </p>
           </div>
-          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-rose-500/15 text-rose-400 flex items-center justify-center shrink-0">
-            <CreditCard className="w-5 h-5" />
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center shrink-0">
+            <CreditCard className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
         </Card>
 
-        <Card className="p-3.5 sm:p-5 flex items-center justify-between">
+        <Card className="p-4 flex items-center justify-between">
           <div>
-            <p className="text-[11px] sm:text-xs uppercase tracking-wider text-slate-400">Combined Net Balance (MVR)</p>
-            <p className="text-xl sm:text-2xl font-extrabold text-white mt-1 truncate">
-              {formatCurrency(summary.totalBalance, currency, hide)}
+            <span className="text-xs font-medium text-zinc-400">Net Combined Balance</span>
+            <p className="text-xl sm:text-2xl font-bold text-white font-display tabular-nums mt-1 truncate">
+              <AnimatedNumber value={summary.totalBalance} currency={currency} hide={hide} />
             </p>
-            <p className="text-[11px] sm:text-xs font-semibold text-emerald-400 mt-0.5">
-              {formatSecondaryUSD(summary.totalBalance, liveRate, hide)} USD (@ {liveRate.toFixed(2)})
+            <p className="text-xs text-emerald-400 tabular-nums mt-0.5">
+              ≈ $<AnimatedNumber value={summary.totalBalance / liveRate} hide={hide} /> USD (@ {liveRate.toFixed(2)})
             </p>
           </div>
-          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-violet-500/15 text-violet-400 flex items-center justify-center shrink-0">
-            <TrendingUp className="w-5 h-5" />
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
+            <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
         </Card>
       </div>
 
-      {/* Accounts Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-        {accounts.map((acc) => {
-          const isSelected = selectedAccount?.id === acc.id;
-          return (
-            <div
-              key={acc.id}
-              onClick={() => handleSelectAccount(acc.id)}
-              className={`faisaa-card rounded-2xl p-4 sm:p-5 border transition-all cursor-pointer relative overflow-hidden ${
-                isSelected
-                  ? 'bg-[#171B2E] border-violet-500 shadow-lg shadow-violet-500/15'
-                  : 'bg-[#131622] border-white/[0.07] hover:border-white/[0.18]'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div
-                    className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center shrink-0"
-                    style={{ backgroundColor: `${acc.color}22`, color: acc.color }}
-                  >
-                    <DynamicIcon name={acc.icon} className="w-5 h-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm sm:text-base font-bold text-white truncate">{acc.name}</h3>
-                      {!acc.isActive && <Badge variant="warning">Archived</Badge>}
+      {/* Accounts Grid or Rich Empty State */}
+      {accounts.length === 0 ? (
+        <EmptyState
+          icon={Landmark}
+          title="No bank or cash accounts connected"
+          description="Track your Bank of Maldives (BML), Maldives Islamic Bank (MIB), and physical cash accounts in one unified dashboard."
+          templatesTitle="Quick-start account presets:"
+          templates={accountTemplates}
+          action={
+            <Button size="sm" onClick={() => openAddModal()}>
+              <Plus className="w-4 h-4" /> Add Custom Account
+            </Button>
+          }
+        />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          {accounts.map((acc) => {
+            const isSelected = selectedAccount?.id === acc.id;
+            return (
+              <div
+                key={acc.id}
+                onClick={() => handleSelectAccount(acc.id)}
+                className={`faisaa-card rounded-2xl p-4 sm:p-5 border transition-all cursor-pointer relative overflow-hidden ${
+                  isSelected
+                    ? 'bg-[#141622] border-indigo-500/60 shadow-lg shadow-indigo-500/10'
+                    : 'bg-[#111218] border-white/[0.06] hover:border-white/[0.14]'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <InstitutionLogo
+                      institution={acc.institution}
+                      accountName={acc.name}
+                      accountType={acc.type}
+                      icon={acc.icon}
+                      color={acc.color}
+                      size="md"
+                    />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h3 className="text-sm font-semibold text-white truncate">{acc.name}</h3>
+                        {acc.isDefault && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-400/10 text-amber-300 border border-amber-400/20">
+                            <Star className="w-2.5 h-2.5 fill-amber-300 text-amber-300" /> Default
+                          </span>
+                        )}
+                        {!acc.isActive && <Badge variant="warning">Archived</Badge>}
+                      </div>
+                      <p className="text-xs text-zinc-400 truncate mt-0.5">
+                        {acc.institution || acc.type} {acc.lastFour ? `•••• ${acc.lastFour}` : ''}
+                      </p>
                     </div>
-                    <p className="text-xs text-slate-400 truncate">
-                      {acc.institution || acc.type} {acc.lastFour ? `•••• ${acc.lastFour}` : ''}
-                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    {!acc.isDefault && (
+                      <button
+                        onClick={() => handleSetDefaultAccount(acc.id, acc.name)}
+                        title="Set as default account"
+                        className="p-1.5 rounded-lg text-zinc-400 hover:text-amber-300 hover:bg-amber-400/10 cursor-pointer transition-colors"
+                      >
+                        <Star className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => openEditModal(acc)}
+                      title="Edit account"
+                      className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] cursor-pointer transition-colors"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setDeleteTarget(acc)}
+                      title="Delete account"
+                      className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={() => openEditModal(acc)}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.07] cursor-pointer"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setDeleteTarget(acc)}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-4 sm:mt-5 flex items-end justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400">
-                    Current Balance ({acc.currency})
-                  </p>
-                  <p
-                    className={`text-xl sm:text-2xl font-extrabold mt-0.5 font-display truncate ${
-                      acc.balance < 0 ? 'text-rose-400' : 'text-white'
-                    }`}
-                  >
-                    {formatCurrency(acc.balance, acc.currency, hide)}
-                  </p>
-                  {acc.currency === 'USD' && (
-                    <p className="text-[11px] sm:text-xs font-semibold text-emerald-400 mt-0.5 truncate">
-                      ≈ {formatCurrency(acc.balance * liveRate, 'MVR', hide)}
+                <div className="mt-4 flex items-end justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className="text-[11px] text-zinc-500 uppercase tracking-wider">
+                      Balance ({acc.currency})
+                    </span>
+                    <p
+                      className={`text-xl sm:text-2xl font-bold mt-0.5 font-display tabular-nums truncate ${
+                        acc.balance < 0 ? 'text-rose-400' : 'text-white'
+                      }`}
+                    >
+                      <AnimatedNumber value={acc.balance} currency={acc.currency} hide={hide} />
                     </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <Badge variant={acc.currency === 'USD' ? 'success' : 'purple'} className="text-[10px]">
-                    {acc.currency}
-                  </Badge>
-                  <Badge variant="default" className="text-[10px] hidden xs:inline-flex">{acc.type.replace('_', ' ')}</Badge>
+                    {acc.currency === 'USD' && (
+                      <p className="text-xs font-medium text-emerald-400 mt-0.5 tabular-nums truncate">
+                        ≈ <AnimatedNumber value={acc.balance * liveRate} currency="MVR" hide={hide} />
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Badge variant={acc.currency === 'USD' ? 'success' : 'purple'} className="text-[10px]">
+                      {acc.currency}
+                    </Badge>
+                    <Badge variant="default" className="text-[10px] hidden xs:inline-flex">{acc.type.replace('_', ' ')}</Badge>
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Selected Account Detail Panel: Balance History Chart + Recent Activity */}
       {selectedAccount && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 pt-2">
           <Card className="lg:col-span-7 min-w-0">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-base font-bold text-white">
-                  {selectedAccount.name} — 6-Month Balance History
-                </h3>
-                <p className="text-xs text-slate-400">
-                  {selectedAccount.institution} • Account Activity & Balance Trajectory
-                </p>
+            <div className="flex items-center justify-between mb-4 gap-2 flex-wrap sm:flex-nowrap">
+              <div className="flex items-center gap-3">
+                <InstitutionLogo
+                  institution={selectedAccount.institution}
+                  accountName={selectedAccount.name}
+                  accountType={selectedAccount.type}
+                  icon={selectedAccount.icon}
+                  color={selectedAccount.color}
+                  size="md"
+                />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm sm:text-base font-semibold text-white">
+                      {selectedAccount.name} — 6-Month Balance History
+                    </h3>
+                    {selectedAccount.isDefault && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-amber-400/10 text-amber-300 border border-amber-400/20">
+                        <Star className="w-2.5 h-2.5 fill-amber-300 text-amber-300" /> Default
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    {selectedAccount.institution || 'Standard'} • Trajectory & trend
+                  </p>
+                </div>
               </div>
-              <Badge variant="purple">{selectedAccount.currency}</Badge>
+              <div className="flex items-center gap-2">
+                {!selectedAccount.isDefault && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="text-xs h-7 px-2.5 text-amber-300 hover:bg-amber-400/10 border-amber-400/30"
+                    onClick={() => handleSetDefaultAccount(selectedAccount.id, selectedAccount.name)}
+                  >
+                    <Star className="w-3 h-3 mr-1" /> Set as Default
+                  </Button>
+                )}
+                <Badge variant="purple">{selectedAccount.currency}</Badge>
+              </div>
             </div>
 
             <div className="h-64 w-full">
@@ -429,32 +594,33 @@ export default function AccountsPage() {
                     <linearGradient id="accHistoryGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop
                         offset="5%"
-                        stopColor={selectedAccount.color || '#8B5CF6'}
-                        stopOpacity={0.4}
+                        stopColor={selectedAccount.color || '#6366F1'}
+                        stopOpacity={0.25}
                       />
                       <stop
                         offset="95%"
-                        stopColor={selectedAccount.color || '#8B5CF6'}
+                        stopColor={selectedAccount.color || '#6366F1'}
                         stopOpacity={0}
                       />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="month" stroke="#64748B" fontSize={12} />
-                  <YAxis stroke="#64748B" fontSize={12} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
+                  <XAxis dataKey="month" stroke="#71717A" fontSize={11} axisLine={false} tickLine={false} />
+                  <YAxis stroke="#71717A" fontSize={11} axisLine={false} tickLine={false} />
                   <Tooltip
                     formatter={(val: any) => formatCurrency(Number(val) || 0, selectedAccount.currency, hide)}
                     contentStyle={{
-                      backgroundColor: '#121523',
-                      borderColor: 'rgba(255,255,255,0.1)',
-                      borderRadius: '12px',
+                      backgroundColor: '#111218',
+                      borderColor: 'rgba(255,255,255,0.08)',
+                      borderRadius: '10px',
+                      fontSize: '12px',
                     }}
                   />
                   <Area
                     type="monotone"
                     dataKey="balance"
-                    stroke={selectedAccount.color || '#8B5CF6'}
-                    strokeWidth={2.5}
+                    stroke={selectedAccount.color || '#6366F1'}
+                    strokeWidth={2}
                     fill="url(#accHistoryGrad)"
                   />
                 </AreaChart>
@@ -462,37 +628,39 @@ export default function AccountsPage() {
             </div>
           </Card>
 
-          <Card className="lg:col-span-5">
-            <h3 className="text-base font-bold text-white mb-1">
-              Recent Activity in {selectedAccount.name}
-            </h3>
-            <p className="text-xs text-slate-400 mb-4">
-              Total In: +{formatCurrency(selectedAccount.totalIncome, selectedAccount.currency, hide)} • Total Out: -
-              {formatCurrency(selectedAccount.totalExpenses, selectedAccount.currency, hide)}
-            </p>
+          <Card className="lg:col-span-5 flex flex-col justify-between">
+            <div>
+              <h3 className="text-sm sm:text-base font-semibold text-white mb-0.5">
+                Recent Activity in {selectedAccount.name}
+              </h3>
+              <p className="text-xs text-zinc-400 mb-4 tabular-nums">
+                In: +{formatCurrency(selectedAccount.totalIncome, selectedAccount.currency, hide)} • Out: -
+                {formatCurrency(selectedAccount.totalExpenses, selectedAccount.currency, hide)}
+              </p>
 
-            <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
-              {(selectedAccount.transactions || []).slice(0, 8).map((tx: Transaction) => (
-                <div
-                  key={tx.id}
-                  className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05]"
-                >
-                  <div>
-                    <p className="text-xs font-semibold text-white">{tx.payee}</p>
-                    <p className="text-[11px] text-slate-400">
-                      {formatDate(tx.date, user?.dateFormat)}
-                    </p>
-                  </div>
-                  <span
-                    className={`text-xs font-bold ${
-                      tx.type === 'INCOME' ? 'text-emerald-400' : 'text-white'
-                    }`}
+              <div className="divide-y divide-white/[0.04] max-h-64 overflow-y-auto pr-1">
+                {(selectedAccount.transactions || []).slice(0, 8).map((tx: Transaction) => (
+                  <div
+                    key={tx.id}
+                    className="py-2.5 flex items-center justify-between"
                   >
-                    {tx.type === 'INCOME' ? '+' : '-'}
-                    {formatCurrency(tx.amount, tx.currency || selectedAccount.currency, hide)}
-                  </span>
-                </div>
-              ))}
+                    <div>
+                      <p className="text-xs font-medium text-white">{tx.payee}</p>
+                      <p className="text-[11px] text-zinc-500 tabular-nums">
+                        {formatDate(tx.date, user?.dateFormat)}
+                      </p>
+                    </div>
+                    <span
+                      className={`text-xs font-semibold tabular-nums ${
+                        tx.type === 'INCOME' ? 'text-emerald-400' : 'text-white'
+                      }`}
+                    >
+                      {tx.type === 'INCOME' ? '+' : '-'}
+                      {formatCurrency(tx.amount, tx.currency || selectedAccount.currency, hide)}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </Card>
         </div>
@@ -558,7 +726,16 @@ export default function AccountsPage() {
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-300 mb-1">Institution Name</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs text-slate-300">Bank / Institution</label>
+                <InstitutionLogo
+                  institution={form.institution}
+                  accountName={form.name}
+                  color={form.color}
+                  icon={form.icon}
+                  size="xs"
+                />
+              </div>
               <input
                 type="text"
                 value={form.institution}
@@ -566,6 +743,35 @@ export default function AccountsPage() {
                 placeholder="e.g. Bank of Maldives"
                 className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-xs text-white"
               />
+              {/* Quick Select Institution Pills */}
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {INSTITUTIONS.map((inst) => (
+                  <button
+                    key={inst.id}
+                    type="button"
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        institution: inst.name,
+                        color: inst.defaultColor,
+                        icon: inst.type === 'Wallet' ? 'smartphone' : 'landmark',
+                      })
+                    }
+                    className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-medium border transition-all cursor-pointer ${
+                      form.institution === inst.name
+                        ? 'bg-indigo-600/30 border-indigo-500 text-white shadow-xs'
+                        : 'bg-white/[0.03] border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.06]'
+                    }`}
+                  >
+                    <img
+                      src={inst.logo}
+                      alt={inst.shortName}
+                      className="w-3.5 h-3.5 rounded object-contain bg-white"
+                    />
+                    {inst.shortName}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -597,6 +803,20 @@ export default function AccountsPage() {
                 ))}
               </div>
             </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 pt-2 pb-1 px-1">
+            <input
+              type="checkbox"
+              id="isDefaultAccount"
+              checked={form.isDefault}
+              onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
+              className="w-4 h-4 rounded bg-white/[0.04] border-white/[0.1] text-violet-500 focus:ring-violet-500 cursor-pointer accent-violet-600"
+            />
+            <label htmlFor="isDefaultAccount" className="text-xs text-slate-300 cursor-pointer flex items-center gap-1.5 select-none">
+              <span className="font-medium text-white">Set as primary default account</span>
+              <span className="text-[11px] text-slate-400 hidden sm:inline">(Auto-selected in transactions & Telegram)</span>
+            </label>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">

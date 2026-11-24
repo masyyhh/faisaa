@@ -82,6 +82,16 @@ export const passwordUpdateSchema = z.object({
   newPassword: passwordComplexitySchema,
 });
 
+export const forgotPasswordRequestSchema = z.object({
+  identifier: z.string().trim().min(1, 'Please enter your email or username'),
+});
+
+export const resetPasswordConfirmSchema = z.object({
+  identifier: z.string().trim().min(1, 'Please enter your email or username'),
+  code: z.string().trim().min(4, 'Please enter the verification code'),
+  newPassword: passwordComplexitySchema,
+});
+
 export const accountSchema = z.object({
   name: z.string().min(1, 'Account name is required').max(80),
   type: z.enum(['CASH', 'CHECKING', 'SAVINGS', 'CREDIT_CARD', 'INVESTMENT', 'LOAN', 'OTHER']),
@@ -94,6 +104,7 @@ export const accountSchema = z.object({
   lastFour: z.string().optional().nullable().transform(sanitizeLastFour),
   notes: z.string().optional().nullable(),
   isActive: z.boolean().optional().default(true),
+  isDefault: z.boolean().optional().default(false),
 });
 
 export const transferSchema = z.object({
@@ -168,7 +179,7 @@ export const recurringTransactionSchema = z.object({
   amount: z.coerce.number().positive('Amount must be positive'),
   currency: z.enum(['MVR', 'USD']).optional().default('MVR'),
   payee: z.string().min(1, 'Payee is required').max(120),
-  frequency: z.enum(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']),
+  frequency: z.enum(['DAILY', 'WEEKLY', 'BIWEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY']),
   interval: z.coerce.number().int().positive().default(1),
   startDate: z.string().min(1, 'Start date is required'),
   endDate: z.string().optional().nullable(),

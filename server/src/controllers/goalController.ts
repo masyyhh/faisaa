@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import type { SavingsGoal } from '@prisma/client';
 import prisma from '../prisma/client.js';
 import { goalSchema } from '../validators/schemas.js';
+import { DEFAULT_USD_TO_MVR_RATE } from '../utils/currency.js';
 
 export interface Milestone {
   label: string;
@@ -209,6 +210,7 @@ export async function contributeToGoal(req: Request, res: Response, next: NextFu
           where: { id: accountId, userId: req.user!.id },
         });
         if (account) {
+          const txAmount = action === 'WITHDRAW' ? effectiveAmount : numericAmount;
           await tx.account.update({
             where: { id: account.id },
             data: {
@@ -216,6 +218,25 @@ export async function contributeToGoal(req: Request, res: Response, next: NextFu
                 action === 'WITHDRAW'
                   ? { increment: effectiveAmount }
                   : { decrement: numericAmount },
+            },
+          });
+
+          // Create ledger transaction entry for account history and audit trail
+          await tx.transaction.create({
+            data: {
+              userId: req.user!.id,
+              accountId: account.id,
+              type: action === 'WITHDRAW' ? 'INCOME' : 'EXPENSE',
+              amount: txAmount,
+              currency: account.currency || 'MVR',
+              exchangeRateUsed: req.user?.usdToMvrRate || DEFAULT_USD_TO_MVR_RATE,
+              payee: `Savings Goal: ${existing.name}`,
+              description:
+                action === 'WITHDRAW'
+                  ? `Withdrawal from savings goal "${existing.name}"`
+                  : `Contribution to savings goal "${existing.name}"`,
+              date: new Date(),
+              isRecurring: false,
             },
           });
         }

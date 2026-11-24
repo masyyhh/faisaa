@@ -13,10 +13,14 @@ function resolveDateRange(range?: string, customStart?: string, customEnd?: stri
       start = new Date(now);
       start.setDate(now.getDate() - day);
       start.setHours(0, 0, 0, 0);
+      end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      end.setHours(23, 59, 59, 999);
       break;
     }
     case 'this_month':
       start = new Date(now.getFullYear(), now.getMonth(), 1);
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
       break;
     case 'last_month':
       start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -24,12 +28,15 @@ function resolveDateRange(range?: string, customStart?: string, customEnd?: stri
       break;
     case 'last_3_months':
       start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
       break;
     case 'last_6_months':
       start = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
       break;
     case 'this_year':
       start = new Date(now.getFullYear(), 0, 1);
+      end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
       break;
     case 'custom':
       if (customStart) start = new Date(customStart);

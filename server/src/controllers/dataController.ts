@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import prisma from '../prisma/client.js';
+import { DEFAULT_USD_TO_MVR_RATE } from '../utils/currency.js';
 
 export type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER';
 export type RecurringFrequency = 'DAILY' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY';
@@ -140,7 +141,11 @@ export async function importCSVTransactions(req: Request, res: Response, next: N
     ]);
 
     const fallbackAccount =
-      accounts.find((a) => a.id === defaultAccountId) || accounts[0];
+      accounts.find((a) => a.id === defaultAccountId) ||
+      accounts.find((a) => a.isDefault && a.isActive) ||
+      accounts.find((a) => a.isDefault) ||
+      accounts.find((a) => a.isActive) ||
+      accounts[0];
 
     if (!fallbackAccount) {
       return res.status(400).json({
@@ -199,7 +204,7 @@ export async function importCSVTransactions(req: Request, res: Response, next: N
             type,
             amount,
             currency,
-            exchangeRateUsed: req.user?.usdToMvrRate || 18.45,
+            exchangeRateUsed: req.user?.usdToMvrRate || DEFAULT_USD_TO_MVR_RATE,
             payee,
             description: row.description || row.Description || 'Imported statement transaction',
             notes: row.notes || row.Notes || null,

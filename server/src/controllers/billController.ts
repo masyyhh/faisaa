@@ -146,6 +146,33 @@ export async function updateBill(req: Request, res: Response, next: NextFunction
     }
 
     const parsed = billSchema.partial().parse(req.body);
+
+    if (parsed.accountId) {
+      const account = await prisma.account.findFirst({
+        where: { id: parsed.accountId, userId: req.user!.id },
+      });
+      if (!account) {
+        res.status(403).json({
+          success: false,
+          message: 'Selected account not found or unauthorized.',
+        });
+        return;
+      }
+    }
+
+    if (parsed.categoryId) {
+      const category = await prisma.category.findFirst({
+        where: { id: parsed.categoryId, userId: req.user!.id },
+      });
+      if (!category) {
+        res.status(403).json({
+          success: false,
+          message: 'Selected category not found or unauthorized.',
+        });
+        return;
+      }
+    }
+
     const updated = await prisma.bill.update({
       where: { id },
       data: {

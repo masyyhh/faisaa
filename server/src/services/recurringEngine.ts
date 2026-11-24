@@ -142,8 +142,8 @@ export async function processDueRecurringForUser(userId: string): Promise<Proces
 
       processedTransactions.push(result);
 
-      // 5. Send Telegram notification if enabled
-      if (item.user?.telegramEnabled && (item.user.telegramChatId || process.env.TELEGRAM_CHAT_ID)) {
+      // 5. Send Telegram notification if enabled and linked to user
+      if (item.user?.telegramEnabled && item.user.telegramChatId) {
         const textMessage = `🔄 *Auto Recurring ${item.type === 'INCOME' ? 'Income' : 'Expense'} Executed*\n\n` +
           `• Payee: *${item.payee}*\n` +
           `• Amount: *${currency} ${item.amount.toFixed(2)}*\n` +

@@ -42,6 +42,7 @@ export interface Account {
   institution?: string | null;
   lastFour?: string | null;
   notes?: string | null;
+  isDefault?: boolean;
   isActive: boolean;
   balanceInMvr?: number;
   balanceInUsd?: number;
@@ -285,11 +286,29 @@ const api = axios.create({
   },
 });
 
-// Attach Authorization header as secondary fallback for non-cookie environments
+// Clear legacy insecure tokens from localStorage
+if (typeof window !== 'undefined') {
+  try {
+    localStorage.removeItem('faisaa_token');
+    localStorage.removeItem('finora_token');
+  } catch {
+    // Ignore storage errors in restricted contexts
+  }
+}
+
+// In-memory access token storage (OWASP compliant: not accessible via localStorage XSS)
+let inMemoryToken: string | null = null;
+
+export const setAuthToken = (token: string | null) => {
+  inMemoryToken = token;
+};
+
+export const getAuthToken = () => inMemoryToken;
+
+// Attach Authorization header if in-memory token exists (HTTP-only cookies sent via withCredentials)
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = localStorage.getItem('faisaa_token') || localStorage.getItem('finora_token');
-  if (token && !config.headers.Authorization) {
-    config.headers.Authorization = `Bearer ${token}`;
+  if (inMemoryToken && !config.headers.Authorization) {
+    config.headers.Authorization = `Bearer ${inMemoryToken}`;
   }
   return config;
 });
@@ -344,16 +363,13 @@ api.interceptors.response.use(
 
       try {
         const { data } = await api.post('/auth/refresh');
-        const newToken = data.token;
-        if (newToken) {
-          localStorage.setItem('faisaa_token', newToken);
-        }
+        const newToken = data.token || null;
+        setAuthToken(newToken);
         processQueue(null, newToken);
         return api(originalRequest);
       } catch (refreshErr) {
         processQueue(refreshErr, null);
-        localStorage.removeItem('faisaa_token');
-        localStorage.removeItem('finora_token');
+        setAuthToken(null);
         const path = window.location.pathname;
         if (path !== '/login' && path !== '/register') {
           window.location.href = '/login';

@@ -178,7 +178,7 @@ export async function getTransactions(req: Request, res: Response, next: NextFun
 
     const rate = Number(req.user!.usdToMvrRate || 15.42);
 
-    const [totalCount, transactions, allMatching] = await Promise.all([
+    const [totalCount, transactions, aggregatedSums] = await Promise.all([
       prisma.transaction.count({ where }),
       prisma.transaction.findMany({
         where,
@@ -198,34 +198,31 @@ export async function getTransactions(req: Request, res: Response, next: NextFun
           },
         },
       }),
-      prisma.transaction.findMany({
+      // Offload summation to database engine via groupBy to ensure O(1) memory scalability
+      prisma.transaction.groupBy({
+        by: ['type', 'currency'],
         where,
-        select: {
-          type: true,
+        _sum: {
           amount: true,
-          currency: true,
-          account: { select: { currency: true } },
         },
       }),
     ]);
 
-    const toMvrVal = (t: { amount: number; currency?: string | null; account?: { currency: string } | null }) => {
-      const c = t.currency || t.account?.currency || 'MVR';
-      return c === 'USD' ? t.amount * rate : t.amount;
-    };
+    let totalIncome = 0;
+    let totalExpenses = 0;
 
-    const totalIncome = Number(
-      allMatching
-        .filter((t) => t.type === 'INCOME')
-        .reduce((s, t) => s + toMvrVal(t), 0)
-        .toFixed(2)
-    );
-    const totalExpenses = Number(
-      allMatching
-        .filter((t) => t.type === 'EXPENSE')
-        .reduce((s, t) => s + toMvrVal(t), 0)
-        .toFixed(2)
-    );
+    for (const group of aggregatedSums) {
+      const sum = group._sum.amount || 0;
+      const converted = (group.currency || 'MVR') === 'USD' ? sum * rate : sum;
+      if (group.type === 'INCOME') {
+        totalIncome += converted;
+      } else if (group.type === 'EXPENSE') {
+        totalExpenses += converted;
+      }
+    }
+
+    totalIncome = Number(totalIncome.toFixed(2));
+    totalExpenses = Number(totalExpenses.toFixed(2));
 
     const formatted = transactions.map((t) => ({
       ...t,
@@ -744,6 +741,47 @@ export async function duplicateTransaction(req: Request, res: Response, next: Ne
             tags: (duplicated.transactionTags || []).map((tt) => tt?.tag?.name).filter(Boolean),
           }
         : null,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getPayeeHistory(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user!.id;
+    const recent = await prisma.transaction.findMany({
+      where: {
+        userId,
+        payee: { not: '' },
+        categoryId: { not: null },
+      },
+      orderBy: { date: 'desc' },
+      take: 250,
+      select: {
+        payee: true,
+        categoryId: true,
+        category: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+
+    const payeeMap: Record<string, { categoryId: string; categoryName: string }> = {};
+    for (const tx of recent) {
+      if (!tx.payee || !tx.categoryId || !tx.category) continue;
+      const key = tx.payee.trim().toLowerCase();
+      if (!payeeMap[key]) {
+        payeeMap[key] = {
+          categoryId: tx.categoryId,
+          categoryName: tx.category.name,
+        };
+      }
+    }
+
+    res.json({
+      success: true,
+      payeeMap,
     });
   } catch (err) {
     next(err);
