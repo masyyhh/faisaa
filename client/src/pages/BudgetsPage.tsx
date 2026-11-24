@@ -10,11 +10,14 @@ import {
   ShoppingCart,
   Zap,
   ShoppingBag,
+  Flame,
+  TrendingUp,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
-  BarChart,
+  ComposedChart,
   Bar,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -30,12 +33,12 @@ import {
   ProgressBar,
   Modal,
   ConfirmDialog,
-  LoadingState,
   EmptyState,
   Skeleton,
   SkeletonCard,
   SkeletonMetric,
   AnimatedNumber,
+  AmbientHalo,
 } from '../components/ui';
 import { formatCurrency, DynamicIcon } from '../utils/formatters';
 
@@ -46,6 +49,12 @@ export interface BudgetWithMetrics extends Budget {
   percentage?: number;
   overAmount?: number;
   statusState?: string;
+}
+
+function getOrdinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
 export default function BudgetsPage() {
@@ -230,6 +239,29 @@ export default function BudgetsPage() {
     );
   }
 
+  const today = new Date();
+  const currentDay = Math.max(1, today.getDate());
+  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const daysRemaining = Math.max(0, daysInMonth - currentDay);
+
+  const enhancedHistory = history.map((item, index) => {
+    const isCurrentMonth = index === history.length - 1;
+    if (!isCurrentMonth) {
+      return {
+        ...item,
+        projectedPace: item.spent,
+      };
+    }
+    const spentSoFar = Number(item.spent) || 0;
+    const dailyVelocity = currentDay > 0 ? spentSoFar / currentDay : 0;
+    const projectedTotal = Math.round(dailyVelocity * daysInMonth);
+    return {
+      ...item,
+      projectedPace: projectedTotal,
+      dailyVelocity: Math.round(dailyVelocity),
+    };
+  });
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -248,82 +280,102 @@ export default function BudgetsPage() {
         </Button>
       </div>
 
-      {/* Overall Budget Health Hero */}
+      {/* Overall Budget Health Hero with Ambient Cashflow Halo */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
-        <Card className="lg:col-span-5 flex flex-col justify-between p-4 sm:p-5">
-          <div>
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] uppercase tracking-wider font-semibold text-zinc-400">
-                Overall Budget Health
-              </span>
-              <Badge
-                variant={
-                  summary.overallPercentage >= 100
-                    ? 'danger'
-                    : summary.overallPercentage >= 80
-                    ? 'warning'
-                    : 'success'
-                }
-              >
-                <AnimatedNumber value={summary.overallPercentage} suffix="%" /> Used
-              </Badge>
-            </div>
-
-            <div className="mt-4">
-              <p className="text-2xl sm:text-3xl font-bold tracking-tight text-white font-display truncate tabular-nums">
-                <AnimatedNumber value={summary.totalSpent} currency={currency} hide={hide} />{' '}
-                <span className="text-sm sm:text-base font-normal text-zinc-400">
-                  / <AnimatedNumber value={summary.totalBudgeted} currency={currency} hide={hide} />
+        <Card className="lg:col-span-5 p-4 sm:p-5 relative overflow-hidden">
+          <AmbientHalo
+            status={summary.overallPercentage < 85 ? 'positive' : summary.overallPercentage >= 100 ? 'negative' : 'neutral'}
+            intensity="normal"
+            position="top"
+            className="h-full flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] uppercase tracking-wider font-semibold text-zinc-400">
+                  Overall Budget Health
                 </span>
-              </p>
-              <p className="text-xs text-zinc-400 mt-1 tabular-nums">
-                <AnimatedNumber value={summary.totalRemaining} currency={currency} hide={hide} /> remaining across{' '}
-                {budgets.length} budgeted categories
-              </p>
+                <Badge
+                  variant={
+                    summary.overallPercentage >= 100
+                      ? 'danger'
+                      : summary.overallPercentage >= 80
+                      ? 'warning'
+                      : 'success'
+                  }
+                >
+                  <AnimatedNumber value={summary.overallPercentage} suffix="%" /> Used
+                </Badge>
+              </div>
+
+              <div className="mt-4">
+                <p className="text-2xl sm:text-3xl font-bold tracking-tight text-white font-display truncate tabular-nums">
+                  <AnimatedNumber value={summary.totalSpent} currency={currency} hide={hide} />{' '}
+                  <span className="text-sm sm:text-base font-normal text-zinc-400">
+                    / <AnimatedNumber value={summary.totalBudgeted} currency={currency} hide={hide} />
+                  </span>
+                </p>
+                <p className="text-xs text-zinc-400 mt-1 tabular-nums">
+                  <AnimatedNumber value={summary.totalRemaining} currency={currency} hide={hide} /> remaining across{' '}
+                  {budgets.length} budgeted categories
+                </p>
+              </div>
+
+              <ProgressBar
+                value={summary.overallPercentage}
+                color={summary.overallPercentage >= 100 ? '#F43F5E' : '#6366F1'}
+                height="h-2.5"
+                className="mt-5"
+              />
             </div>
 
-            <ProgressBar
-              value={summary.overallPercentage}
-              color={summary.overallPercentage >= 100 ? '#F43F5E' : '#6366F1'}
-              height="h-2.5"
-              className="mt-5"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 mt-6 pt-4 border-t border-white/[0.06]">
-            <div className="flex items-center gap-2 text-xs">
-              <AlertCircle className="w-4 h-4 text-rose-400" />
-              <span className="text-zinc-300">
-                <strong className="text-white tabular-nums"><AnimatedNumber value={summary.overBudgetCount} /></strong> Over Budget
-              </span>
+            <div className="grid grid-cols-2 gap-3 mt-6 pt-4 border-t border-white/[0.06]">
+              <div className="flex items-center gap-2 text-xs">
+                <AlertCircle className="w-4 h-4 text-rose-400" />
+                <span className="text-zinc-300">
+                  <strong className="text-white tabular-nums"><AnimatedNumber value={summary.overBudgetCount} /></strong> Over Budget
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <span className="text-zinc-300">
+                  <strong className="text-white tabular-nums"><AnimatedNumber value={Math.max(0, budgets.length - summary.overBudgetCount)} /></strong> Within Limit
+                </span>
+              </div>
             </div>
-            <div className="flex items-center gap-2 text-xs">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span className="text-zinc-300">
-                <strong className="text-white tabular-nums"><AnimatedNumber value={Math.max(0, budgets.length - summary.overBudgetCount)} /></strong> Within Limit
-              </span>
-            </div>
-          </div>
+          </AmbientHalo>
         </Card>
 
-        {/* Historical Budget Performance Chart */}
+        {/* Historical Budget Performance Chart with Burn Rate Trajectory Line */}
         <Card className="lg:col-span-7 min-w-0 p-4 sm:p-5">
-          <div className="mb-4">
-            <h3 className="text-sm font-semibold text-white">
-              Historical Budget vs Actual Performance
-            </h3>
-            <p className="text-xs text-zinc-400">
-              6-month comparison of planned monthly limits against real spending
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-white">
+                  Historical Budget vs Actual Performance
+                </h3>
+                <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1">
+                  <TrendingUp className="w-3 h-3" /> Projected Trajectory
+                </span>
+              </div>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Dotted trajectory forecasts month-end spend at current velocity ({daysRemaining} days remaining)
+              </p>
+            </div>
           </div>
           <div className="h-56 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={history} barGap={6}>
+              <ComposedChart data={enhancedHistory} barGap={6}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                 <XAxis dataKey="month" stroke="#71717A" fontSize={11} tickLine={false} axisLine={false} />
                 <YAxis stroke="#71717A" fontSize={11} tickLine={false} axisLine={false} />
                 <Tooltip
-                  formatter={(v: any) => formatCurrency(Number(v) || 0, currency, hide)}
+                  formatter={(v: any, name: any) => {
+                    const formatted = formatCurrency(Number(v) || 0, currency, hide);
+                    if (name === 'Projected Burn Rate') {
+                      return [formatted, 'Projected Trajectory'];
+                    }
+                    return [formatted, name];
+                  }}
                   contentStyle={{
                     backgroundColor: '#111218',
                     borderColor: 'rgba(255,255,255,0.08)',
@@ -334,7 +386,17 @@ export default function BudgetsPage() {
                 <Legend wrapperStyle={{ fontSize: '11px' }} />
                 <Bar dataKey="budgeted" name="Budgeted Limit" fill="#6366F1" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="spent" name="Actual Spent" fill="#EC4899" radius={[4, 4, 0, 0]} />
-              </BarChart>
+                <Line
+                  type="monotone"
+                  dataKey="projectedPace"
+                  name="Projected Burn Rate"
+                  stroke="#F59E0B"
+                  strokeWidth={2.5}
+                  strokeDasharray="4 4"
+                  dot={{ r: 4, fill: '#F59E0B', strokeWidth: 1.5, stroke: '#111218' }}
+                  activeDot={{ r: 6, fill: '#F59E0B' }}
+                />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </Card>
@@ -358,6 +420,13 @@ export default function BudgetsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
           {budgets.map((b) => {
             const stateMeta = getStateBadge(b.statusState);
+            const spent = Number(b.spent) || 0;
+            const amount = Number(b.amount) || 1;
+            const dailyPace = currentDay > 0 ? spent / currentDay : 0;
+            const projectedTotal = Math.round(dailyPace * daysInMonth);
+            const exhaustionDay = dailyPace > 0 ? Math.floor(amount / dailyPace) : daysInMonth + 1;
+            const willExhaustEarly = spent < amount && projectedTotal > amount && exhaustionDay <= daysInMonth;
+
             return (
               <Card key={b.id} className="flex flex-col justify-between">
                 <div>
@@ -417,6 +486,21 @@ export default function BudgetsPage() {
                       height="h-2"
                       className="mt-2.5"
                     />
+
+                    {/* Dotted projected burn rate velocity & exhaustion warning */}
+                    {willExhaustEarly ? (
+                      <div className="mt-3 p-2 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-start gap-2 text-xs text-amber-300">
+                        <Flame className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5 animate-pulse" />
+                        <span className="font-medium">
+                          At this pace, your {b.category?.name || b.name || 'budget'} will be exhausted on the {getOrdinal(exhaustionDay)}.
+                        </span>
+                      </div>
+                    ) : spent > 0 && spent < amount ? (
+                      <div className="mt-2.5 py-1 px-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04] flex items-center justify-between text-[11px] text-zinc-400">
+                        <span>Velocity: <strong className="text-zinc-200 tabular-nums">{formatCurrency(dailyPace, currency, hide)}/day</strong></span>
+                        <span className="text-emerald-400/90 font-medium tabular-nums">Projected: {formatCurrency(projectedTotal, currency, hide)}</span>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 

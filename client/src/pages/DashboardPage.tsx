@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowDownLeft,
@@ -24,7 +24,6 @@ import {
   Card,
   Badge,
   ProgressBar,
-  LoadingState,
   Button,
   Skeleton,
   SkeletonCard,
@@ -33,8 +32,9 @@ import {
   EmptyState,
   AnimatedNumber,
   InstitutionLogo,
+  AmbientHalo,
 } from '../components/ui';
-import { formatCurrency, formatSecondaryUSD, formatDate, DynamicIcon } from '../utils/formatters';
+import { formatCurrency, formatDate, DynamicIcon } from '../utils/formatters';
 
 interface DashboardData {
   metrics: {
@@ -93,6 +93,7 @@ export default function DashboardPage() {
   const [selectedAccountId, setSelectedAccountId] = useState('ALL');
   const [quickRate, setQuickRate] = useState('');
   const [updatingRate, setUpdatingRate] = useState(false);
+  const [scrubbedPoint, setScrubbedPoint] = useState<{ month?: string; date?: string; income?: number; expenses?: number; net?: number } | null>(null);
 
   useEffect(() => {
     async function fetchDashboard() {
@@ -215,6 +216,12 @@ export default function DashboardPage() {
   const netCashflow = Number(metrics?.netCashflow) || 0;
   const netWorth = Number(metrics?.netWorth ?? metrics?.totalBalance) || 0;
 
+  const activeIncome = scrubbedPoint && scrubbedPoint.income !== undefined ? scrubbedPoint.income : totalIncome;
+  const activeExpenses = scrubbedPoint && scrubbedPoint.expenses !== undefined ? scrubbedPoint.expenses : totalExpenses;
+  const activeNet = scrubbedPoint && scrubbedPoint.income !== undefined && scrubbedPoint.expenses !== undefined
+    ? (scrubbedPoint.income - scrubbedPoint.expenses)
+    : netCashflow;
+
   const displayedBalance = selectedAccount
     ? selectedAccount.currency === 'USD'
       ? (Number(selectedAccount.balance) || 0) * liveRate
@@ -283,8 +290,13 @@ export default function DashboardPage() {
 
       {/* Hero Balance + 4 Minimalist KPI Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 sm:gap-4">
-        {/* Minimalist Primary Balance Card */}
-        <div className="hero-card-preserve lg:col-span-5 rounded-2xl p-5 sm:p-6 bg-[#14151C] border border-white/[0.08] flex flex-col justify-between shadow-lg">
+        {/* Minimalist Primary Balance Card with Adaptive Cashflow Halo */}
+        <AmbientHalo
+          status={netCashflow >= 0 ? 'positive' : 'negative'}
+          intensity="normal"
+          position="top"
+          className="hero-card-preserve lg:col-span-5 rounded-2xl p-5 sm:p-6 bg-[#14151C] border border-white/[0.08] flex flex-col justify-between shadow-lg"
+        >
           <div>
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -352,68 +364,76 @@ export default function DashboardPage() {
               <span>$ ↔ MVR</span>
             </button>
           </div>
-        </div>
+        </AmbientHalo>
 
         {/* 4 Minimalist KPI Cards */}
         <div className="lg:col-span-7 grid grid-cols-2 gap-2.5 sm:gap-4">
           <Card className="flex flex-col justify-between">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-zinc-400">Monthly Income</span>
+              <span className="text-xs font-medium text-zinc-400">
+                {scrubbedPoint?.month ? `Income (${scrubbedPoint.month})` : 'Monthly Income'}
+              </span>
               <span className="text-[11px] font-medium text-emerald-400 tabular-nums">
                 +{incomeChangePct}%
               </span>
             </div>
             <div className="mt-3">
               <p className="text-xl sm:text-2xl font-bold text-white font-display tabular-nums">
-                <AnimatedNumber value={totalIncome} currency="MVR" hide={hide} />
+                <AnimatedNumber value={activeIncome} currency="MVR" hide={hide} />
               </p>
               <p className="text-xs text-zinc-500 mt-0.5 tabular-nums">
-                ≈ <AnimatedNumber value={totalIncome / liveRate} currency="$" suffix=" USD" hide={hide} />
+                ≈ <AnimatedNumber value={activeIncome / liveRate} currency="$" suffix=" USD" hide={hide} />
               </p>
             </div>
           </Card>
 
           <Card className="flex flex-col justify-between">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-zinc-400">Monthly Expenses</span>
+              <span className="text-xs font-medium text-zinc-400">
+                {scrubbedPoint?.month ? `Expenses (${scrubbedPoint.month})` : 'Monthly Expenses'}
+              </span>
               <span className="text-[11px] font-medium text-zinc-400 tabular-nums">
                 {expenseChangePct}%
               </span>
             </div>
             <div className="mt-3">
               <p className="text-xl sm:text-2xl font-bold text-white font-display tabular-nums">
-                <AnimatedNumber value={totalExpenses} currency="MVR" hide={hide} />
+                <AnimatedNumber value={activeExpenses} currency="MVR" hide={hide} />
               </p>
               <p className="text-xs text-zinc-500 mt-0.5 tabular-nums">
-                ≈ <AnimatedNumber value={totalExpenses / liveRate} currency="$" suffix=" USD" hide={hide} />
+                ≈ <AnimatedNumber value={activeExpenses / liveRate} currency="$" suffix=" USD" hide={hide} />
               </p>
             </div>
           </Card>
 
-          <Card className="flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-zinc-400">Net Cashflow</span>
-              <Badge variant={netCashflow >= 0 ? 'success' : 'danger'}>
-                {netCashflow >= 0 ? 'Positive' : 'Deficit'}
-              </Badge>
-            </div>
-            <div className="mt-3">
-              <p
-                className={`text-xl sm:text-2xl font-bold font-display tabular-nums ${
-                  netCashflow >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                }`}
-              >
-                <AnimatedNumber
-                  value={netCashflow}
-                  currency="MVR"
-                  prefix={netCashflow >= 0 ? '+' : ''}
-                  hide={hide}
-                />
-              </p>
-              <p className="text-xs text-zinc-500 mt-0.5 tabular-nums">
-                ≈ <AnimatedNumber value={netCashflow / liveRate} currency="$" suffix=" USD" hide={hide} />
-              </p>
-            </div>
+          <Card className="flex flex-col justify-between relative overflow-hidden">
+            <AmbientHalo status={activeNet >= 0 ? 'positive' : 'negative'} position="top-right" intensity="subtle" className="h-full flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-zinc-400">
+                  {scrubbedPoint?.month ? `Net (${scrubbedPoint.month})` : 'Net Cashflow'}
+                </span>
+                <Badge variant={activeNet >= 0 ? 'success' : 'danger'}>
+                  {activeNet >= 0 ? 'Positive' : 'Deficit'}
+                </Badge>
+              </div>
+              <div className="mt-3">
+                <p
+                  className={`text-xl sm:text-2xl font-bold font-display tabular-nums ${
+                    activeNet >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                  }`}
+                >
+                  <AnimatedNumber
+                    value={activeNet}
+                    currency="MVR"
+                    prefix={activeNet >= 0 ? '+' : ''}
+                    hide={hide}
+                  />
+                </p>
+                <p className="text-xs text-zinc-500 mt-0.5 tabular-nums">
+                  ≈ <AnimatedNumber value={activeNet / liveRate} currency="$" suffix=" USD" hide={hide} />
+                </p>
+              </div>
+            </AmbientHalo>
           </Card>
 
           <Card onClick={() => navigate('/net-worth')} className="flex flex-col justify-between">
@@ -502,7 +522,14 @@ export default function DashboardPage() {
         <Card className="lg:col-span-8">
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h3 className="text-sm font-semibold text-white">Cashflow</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-white">Cashflow</h3>
+                {scrubbedPoint && (
+                  <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 animate-pulse">
+                    Scrubbing: {scrubbedPoint.month}
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-zinc-500">6-month income vs expenses (MVR)</p>
             </div>
             <div className="flex items-center gap-4 text-xs text-zinc-400">
@@ -517,7 +544,16 @@ export default function DashboardPage() {
 
           <div className="h-60 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={cashflowTrend} margin={{ top: 5, right: 5, left: -15, bottom: 0 }}>
+              <AreaChart
+                data={cashflowTrend}
+                margin={{ top: 5, right: 5, left: -15, bottom: 0 }}
+                onMouseMove={(e: any) => {
+                  if (e && e.activePayload && e.activePayload.length > 0) {
+                    setScrubbedPoint(e.activePayload[0].payload);
+                  }
+                }}
+                onMouseLeave={() => setScrubbedPoint(null)}
+              >
                 <defs>
                   <linearGradient id="minIncome" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10B981" stopOpacity={0.18} />
@@ -543,6 +579,7 @@ export default function DashboardPage() {
                   tickFormatter={(v) => `${Math.round(v / 1000)}k`}
                 />
                 <Tooltip
+                  cursor={{ stroke: '#6366F1', strokeWidth: 1.5, strokeDasharray: '4 4' }}
                   formatter={(val: any) => formatCurrency(Number(val) || 0, 'MVR', hide)}
                   contentStyle={{
                     backgroundColor: '#111218',

@@ -314,9 +314,13 @@ export {
 } from './Skeleton';
 
 export { AnimatedNumber } from './AnimatedNumber';
+export { AmbientHalo } from './AmbientHalo';
+export type { AmbientHaloProps } from './AmbientHalo';
 export {
   InstitutionLogo,
   INSTITUTIONS,
   findInstitution,
 } from './InstitutionLogo';
 export type { InstitutionMeta, InstitutionLogoProps } from './InstitutionLogo';
+export { SankeyDiagram } from './SankeyDiagram';
+export type { SankeyDiagramProps, SankeyNode, SankeyFlow } from './SankeyDiagram';

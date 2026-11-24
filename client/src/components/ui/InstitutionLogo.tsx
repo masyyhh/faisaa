@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Landmark, Wallet } from 'lucide-react';
 import { DynamicIcon } from '../../utils/formatters';
 

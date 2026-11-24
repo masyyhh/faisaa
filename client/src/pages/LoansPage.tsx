@@ -3,8 +3,6 @@ import {
   Coins,
   ArrowUpRight,
   ArrowDownLeft,
-  Calendar,
-  Percent,
   CheckCircle2,
   TrendingDown,
   Plus,
@@ -14,7 +12,6 @@ import {
   Sparkles,
   Mountain,
   Snowflake,
-  ShieldAlert,
   Wallet,
   Clock,
   Landmark,
@@ -38,7 +35,7 @@ import {
   SkeletonMetric,
   AnimatedNumber,
 } from '../components/ui';
-import { formatCurrency, formatSecondaryUSD, formatDate } from '../utils/formatters';
+import { formatCurrency, formatDate } from '../utils/formatters';
 import { triggerConfetti } from '../utils/confetti';
 
 const CATEGORIES = [
@@ -111,7 +108,6 @@ export default function LoansPage() {
   });
 
   const currency = user?.currency || 'MVR';
-  const liveRate = user?.usdToMvrRate || 18.45;
   const hide = user?.hideBalances;
 
   const loadData = useCallback(async () => {

@@ -563,9 +563,7 @@ export async function requestPasswordReset(req: Request, res: Response, next: Ne
       // Prevent account enumeration: return uniform generic response
       return res.json({
         success: true,
-        message: 'If an account matches that identifier, a verification code has been dispatched.',
-        telegramSent: false,
-        hasTelegram: false,
+        message: 'If an account matches that identifier, a verification code has been dispatched to your linked contact method.',
       });
     }
 
@@ -609,16 +607,13 @@ export async function requestPasswordReset(req: Request, res: Response, next: Ne
     }
 
     console.log(
-      `[Auth] 🔑 Password reset code generated for ${user.email} (Expires in 15m, Telegram dispatched: ${telegramSent})`
+      `[Auth] 🔑 Password reset request processed for ${user.email} (Expires in 15m, Telegram dispatched: ${telegramSent})`
     );
 
+    // Uniform response to defeat account and channel enumeration
     res.json({
       success: true,
-      message: telegramSent
-        ? `A 6-digit verification code has been sent to your linked Telegram account.`
-        : `If an account matches that identifier, a verification code has been dispatched.`,
-      telegramSent,
-      hasTelegram: Boolean(chatId),
+      message: 'If an account matches that identifier, a verification code has been dispatched to your linked contact method.',
     });
   } catch (err) {
     next(err);

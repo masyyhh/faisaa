@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -614,7 +614,7 @@ export default function AppLayout() {
 
       {/* Mobile Bottom Navigation with safe-area padding */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-[#0B0C12]/95 backdrop-blur-lg border-t border-white/[0.08] px-2 pt-1.5 pb-[max(0.6rem,env(safe-area-inset-bottom))] flex items-center justify-around shadow-2xl">
-        {[ALL_NAV_ITEMS[0], ALL_NAV_ITEMS[1], null, ALL_NAV_ITEMS[2], { name: 'More', path: '#more', icon: Menu }].map((item, idx) => {
+        {[ALL_NAV_ITEMS[0], ALL_NAV_ITEMS[1], null, ALL_NAV_ITEMS[2], { name: 'More', path: '#more', icon: Menu }].map((item) => {
           if (!item) {
             return (
               <button

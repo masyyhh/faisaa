@@ -24,14 +24,38 @@ export async function getBills(req: Request, res: Response, next: NextFunction):
     const userId = req.user!.id;
     const now = new Date();
 
-    const bills = await prisma.bill.findMany({
-      where: { userId },
-      orderBy: { dueDate: 'asc' },
-      include: {
-        account: { select: { id: true, name: true, type: true, color: true } },
-        category: { select: { id: true, name: true, type: true, icon: true, color: true } },
-      },
-    });
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+    const [bills, pastBillPayments] = await Promise.all([
+      prisma.bill.findMany({
+        where: { userId },
+        orderBy: { dueDate: 'asc' },
+        include: {
+          account: { select: { id: true, name: true, type: true, color: true } },
+          category: { select: { id: true, name: true, type: true, icon: true, color: true } },
+        },
+      }),
+      prisma.transaction.findMany({
+        where: {
+          userId,
+          type: 'EXPENSE',
+          date: { gte: sixMonthsAgo },
+          OR: [
+            { isRecurring: true },
+            { description: { contains: 'Bill payment' } },
+          ],
+        },
+        select: {
+          id: true,
+          amount: true,
+          payee: true,
+          description: true,
+          date: true,
+        },
+        orderBy: { date: 'asc' },
+      }),
+    ]);
 
     const enriched = bills.map((bill) => {
       const due = new Date(bill.dueDate);
@@ -41,12 +65,60 @@ export async function getBills(req: Request, res: Response, next: NextFunction):
         computedStatus = 'OVERDUE';
       }
       const monthlyEquivalent = Number(normalizeMonthlyEquivalent(bill.amount, bill.frequency).toFixed(2));
+
+      // Match payment history for this bill
+      const billKeywords = [bill.name.toLowerCase()];
+      if (bill.name.toLowerCase().includes('stelco')) billKeywords.push('stelco');
+      if (bill.name.toLowerCase().includes('mwsc')) billKeywords.push('mwsc');
+      if (bill.name.toLowerCase().includes('dhiraagu')) billKeywords.push('dhiraagu');
+      if (bill.name.toLowerCase().includes('ooredoo')) billKeywords.push('ooredoo');
+
+      const matches = pastBillPayments.filter((t) => {
+        const p = (t.payee || '').toLowerCase();
+        const d = (t.description || '').toLowerCase();
+        return billKeywords.some((kw) => p.includes(kw) || d.includes(kw));
+      });
+
+      const paymentHistory = matches.map((m) => {
+        const dt = new Date(m.date);
+        return {
+          id: m.id,
+          amount: m.amount,
+          date: m.date,
+          month: dt.toLocaleString('en-US', { month: 'short' }),
+        };
+      });
+
+      const averageAmount =
+        paymentHistory.length > 0
+          ? Number((paymentHistory.reduce((s, h) => s + h.amount, 0) / paymentHistory.length).toFixed(2))
+          : null;
+      const minAmount =
+        paymentHistory.length > 0 ? Math.min(...paymentHistory.map((h) => h.amount)) : null;
+      const maxAmount =
+        paymentHistory.length > 0 ? Math.max(...paymentHistory.map((h) => h.amount)) : null;
+
+      const isVariableExplicit = (bill.notes || '').includes('[VARIABLE]');
+      const isVariableGuessed =
+        !bill.isSubscription ||
+        bill.name.toLowerCase().includes('electricity') ||
+        bill.name.toLowerCase().includes('stelco') ||
+        bill.name.toLowerCase().includes('mwsc') ||
+        bill.name.toLowerCase().includes('water') ||
+        bill.name.toLowerCase().includes('utility');
+      const isVariable = isVariableExplicit || isVariableGuessed;
+
       return {
         ...bill,
         status: computedStatus,
         daysUntilDue: diffDays,
         monthlyEquivalent,
         yearlyEquivalent: Number((monthlyEquivalent * 12).toFixed(2)),
+        isVariable,
+        averageAmount,
+        minAmount,
+        maxAmount,
+        paymentHistory,
       };
     });
 
@@ -204,7 +276,7 @@ export async function updateBill(req: Request, res: Response, next: NextFunction
 export async function payBill(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const id = req.params.id as string;
-    const { recordTransaction = true } = req.body;
+    const { recordTransaction = true, paidAmount, accountId: customAccountId } = req.body;
 
     const existing = await prisma.bill.findFirst({
       where: { id, userId: req.user!.id },
@@ -218,6 +290,10 @@ export async function payBill(req: Request, res: Response, next: NextFunction): 
       return;
     }
 
+    const actualAmount =
+      paidAmount !== undefined && Number(paidAmount) > 0 ? Number(paidAmount) : existing.amount;
+    const accountToUse = customAccountId || existing.accountId;
+
     // Calculate next due date based on frequency
     const nextDue = new Date(existing.dueDate);
     if (existing.frequency === 'WEEKLY') nextDue.setDate(nextDue.getDate() + 7);
@@ -227,23 +303,23 @@ export async function payBill(req: Request, res: Response, next: NextFunction): 
     else nextDue.setMonth(nextDue.getMonth() + 1);
 
     const updated = await prisma.$transaction(async (tx) => {
-      if (recordTransaction && existing.accountId) {
+      if (recordTransaction && accountToUse) {
         const account = await tx.account.findUnique({
-          where: { id: existing.accountId },
+          where: { id: accountToUse },
         });
 
         await tx.account.update({
-          where: { id: existing.accountId },
-          data: { balance: { decrement: existing.amount } },
+          where: { id: accountToUse },
+          data: { balance: { decrement: actualAmount } },
         });
 
         await tx.transaction.create({
           data: {
             userId: req.user!.id,
-            accountId: existing.accountId,
+            accountId: accountToUse,
             categoryId: existing.categoryId,
             type: 'EXPENSE',
-            amount: existing.amount,
+            amount: actualAmount,
             currency: account?.currency || 'MVR',
             payee: existing.name,
             description: `Bill payment: ${existing.name}`,
@@ -266,8 +342,9 @@ export async function payBill(req: Request, res: Response, next: NextFunction): 
 
     res.json({
       success: true,
-      message: `${existing.name} marked as paid.`,
+      message: `${existing.name} settled with payment of MVR ${actualAmount.toFixed(2)}.`,
       bill: updated,
+      paidAmount: actualAmount,
     });
   } catch (err) {
     next(err);

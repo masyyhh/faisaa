@@ -1,9 +1,49 @@
-import type { Account, Category, User, Transaction } from '@prisma/client';
+import type { Account, Category, Transaction } from '@prisma/client';
 import prisma from '../prisma/client.js';
 import { sendTelegramMessageRaw } from './telegramService.js';
 import { getBriefingData, formatBriefingMarkdown } from './briefingService.js';
-import { decrypt } from '../utils/crypto.js';
+import { decrypt, hashToken } from '../utils/crypto.js';
 import { DEFAULT_USD_TO_MVR_RATE } from '../utils/currency.js';
+
+// Rate limiting & lockout on Telegram account linking attempts (OWASP Brute-Force Defense)
+interface FailedLinkTracker {
+  attempts: number;
+  lockedUntil?: number;
+}
+const failedLinkingByChatId = new Map<string, FailedLinkTracker>();
+
+function checkLinkingRateLimit(chatId: string): { allowed: boolean; remainingLockMinutes?: number } {
+  const record = failedLinkingByChatId.get(chatId);
+  const now = Date.now();
+  if (!record) return { allowed: true };
+
+  if (record.lockedUntil && record.lockedUntil > now) {
+    const remaining = Math.ceil((record.lockedUntil - now) / 60000);
+    return { allowed: false, remainingLockMinutes: remaining };
+  }
+
+  if (record.lockedUntil && record.lockedUntil <= now) {
+    failedLinkingByChatId.delete(chatId);
+    return { allowed: true };
+  }
+
+  return { allowed: true };
+}
+
+function recordFailedLinkingAttempt(chatId: string): number {
+  const now = Date.now();
+  const record = failedLinkingByChatId.get(chatId) || { attempts: 0 };
+  record.attempts += 1;
+  if (record.attempts >= 5) {
+    record.lockedUntil = now + 15 * 60 * 1000; // 15-minute lockout
+  }
+  failedLinkingByChatId.set(chatId, record);
+  return record.attempts;
+}
+
+function clearFailedLinkingAttempts(chatId: string) {
+  failedLinkingByChatId.delete(chatId);
+}
 
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
   'Food & Dining': [
@@ -221,6 +261,19 @@ export async function handleTelegramWebhookUpdate(
 
   // 1. Handle Account Linking (/link <code>) FIRST
   if (text.startsWith('/link')) {
+    const rateLimitStatus = checkLinkingRateLimit(chatId);
+    if (!rateLimitStatus.allowed) {
+      const botTokenForLockout = await resolveBotToken(userOverride);
+      if (botTokenForLockout && chatId !== 'simulation') {
+        await sendTelegramMessageRaw(
+          botTokenForLockout,
+          chatId,
+          `🔒 *Security Notice:*\nToo many incorrect linking attempts. For security, account linking from this chat has been locked. Please wait ${rateLimitStatus.remainingLockMinutes || 15} minute(s) before trying again.`
+        );
+      }
+      return { handled: true };
+    }
+
     const parts = text.split(/\s+/);
     const code = parts[1]?.trim();
 
@@ -228,9 +281,13 @@ export async function handleTelegramWebhookUpdate(
     const now = new Date();
 
     if (code && !code.includes('@') && !isNaN(Number(code))) {
+      const hashedInput = hashToken(code);
       targetUser = await prisma.user.findFirst({
         where: {
-          telegramLinkingCode: code,
+          OR: [
+            { telegramLinkingCode: hashedInput },
+            { telegramLinkingCode: code },
+          ],
           telegramLinkingExpires: { gte: now },
         },
         include: {
@@ -279,13 +336,26 @@ export async function handleTelegramWebhookUpdate(
     }
 
     if (!targetUser) {
-      console.warn(`[TelegramBot] Invalid or expired linking code: "${code}" from chatId=${chatId}`);
-      await safeSend(
-        chatId,
-        `❌ Invalid or expired linking code.\n\nPlease generate a fresh 6-digit code in *Settings → Notifications & Telegram* on the web and try again.`
-      );
+      const failedCount = recordFailedLinkingAttempt(chatId);
+      const remaining = Math.max(0, 5 - failedCount);
+      console.warn(`[TelegramBot] Invalid or expired linking code from chatId=${chatId} (attempts: ${failedCount})`);
+
+      if (failedCount >= 5) {
+        await safeSend(
+          chatId,
+          `🔒 *Security Lockout:*\nToo many incorrect attempts. For security, account linking from this chat is locked for 15 minutes.`
+        );
+      } else {
+        await safeSend(
+          chatId,
+          `❌ Invalid or expired linking code (${remaining} attempt(s) remaining).\n\nPlease generate a fresh 6-digit code in *Settings → Notifications & Telegram* on the web and try again.`
+        );
+      }
       return { handled: true };
     }
+
+    // Successfully verified: clear failed attempt tracker
+    clearFailedLinkingAttempts(chatId);
 
     // Disassociate this chatId from any existing users to prevent duplicate routing
     await prisma.user.updateMany({

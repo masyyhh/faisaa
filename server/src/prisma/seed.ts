@@ -109,7 +109,7 @@ export async function seedDatabase() {
     },
   });
 
-  const mibSavings = await prisma.account.create({
+  await prisma.account.create({
     data: {
       userId: user.id,
       name: 'MIB MVR Savings',
@@ -126,7 +126,7 @@ export async function seedDatabase() {
     },
   });
 
-  const vanguardUsd = await prisma.account.create({
+  await prisma.account.create({
     data: {
       userId: user.id,
       name: 'Vanguard USD Index',
@@ -177,7 +177,7 @@ export async function seedDatabase() {
     },
   });
 
-  const autoLoanMvr = await prisma.account.create({
+  await prisma.account.create({
     data: {
       userId: user.id,
       name: 'MIB Auto Financing',

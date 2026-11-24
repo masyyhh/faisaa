@@ -22,7 +22,6 @@ import {
   ProgressBar,
   Modal,
   ConfirmDialog,
-  LoadingState,
   EmptyState,
   Skeleton,
   SkeletonCard,
@@ -30,7 +29,7 @@ import {
   AnimatedNumber,
 } from '../components/ui';
 import { triggerConfetti } from '../utils/confetti';
-import { formatCurrency, formatDate, DynamicIcon } from '../utils/formatters';
+import { formatDate } from '../utils/formatters';
 
 export interface GoalWithMetrics extends SavingsGoal {
   percentage?: number;

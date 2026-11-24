@@ -1,4 +1,4 @@
-import type { User, Account, Transaction, Bill, RecurringTransaction, Budget } from '@prisma/client';
+import type { User, Account, Transaction, Bill, RecurringTransaction } from '@prisma/client';
 import prisma from '../prisma/client.js';
 import { sendTelegramNotification, type TelegramSendResult } from './telegramService.js';
 import { DEFAULT_USD_TO_MVR_RATE } from '../utils/currency.js';

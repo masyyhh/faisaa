@@ -13,7 +13,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
-  Landmark,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api, { Account, Category, Transaction, RecurringTransaction } from '../services/api';
@@ -24,7 +23,6 @@ import {
   Modal,
   ConfirmDialog,
   EmptyState,
-  LoadingState,
   SkeletonTable,
   AnimatedNumber,
   InstitutionLogo,

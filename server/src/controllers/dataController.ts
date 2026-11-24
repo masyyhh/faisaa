@@ -158,8 +158,12 @@ export async function importCSVTransactions(req: Request, res: Response, next: N
 
     await prisma.$transaction(async (tx) => {
       for (const row of rows) {
-        const amount = Math.abs(parseFloat(row.amount || row.Amount || 0));
-        if (!amount || isNaN(amount)) continue;
+        const rawAmount = parseFloat(row.amount || row.Amount || 0);
+        const amount = Math.abs(rawAmount);
+        // Enforce finite numeric bounds: ignore NaN, Infinity, zero or unrealistically large amounts
+        if (!Number.isFinite(amount) || isNaN(amount) || amount <= 0 || amount > 100_000_000) {
+          continue;
+        }
 
         const rawType = String(row.type || row.Type || 'EXPENSE').toUpperCase();
         const type: TransactionType = ['INCOME', 'EXPENSE', 'TRANSFER'].includes(rawType)
