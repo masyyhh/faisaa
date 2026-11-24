@@ -16,7 +16,6 @@ import {
 import {
   ResponsiveContainer,
   ComposedChart,
-  BarChart,
   Bar,
   Line,
   XAxis,
@@ -34,7 +33,6 @@ import {
   ProgressBar,
   Modal,
   ConfirmDialog,
-  LoadingState,
   EmptyState,
   Skeleton,
   SkeletonCard,

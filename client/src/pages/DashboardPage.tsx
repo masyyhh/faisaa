@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowDownLeft,
@@ -24,7 +24,6 @@ import {
   Card,
   Badge,
   ProgressBar,
-  LoadingState,
   Button,
   Skeleton,
   SkeletonCard,
@@ -35,7 +34,7 @@ import {
   InstitutionLogo,
   AmbientHalo,
 } from '../components/ui';
-import { formatCurrency, formatSecondaryUSD, formatDate, DynamicIcon } from '../utils/formatters';
+import { formatCurrency, formatDate, DynamicIcon } from '../utils/formatters';
 
 interface DashboardData {
   metrics: {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -20,7 +20,6 @@ import { useAuth } from '../context/AuthContext';
 import api, { Account } from '../services/api';
 import {
   Card,
-  LoadingState,
   Badge,
   Skeleton,
   SkeletonCard,

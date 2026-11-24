@@ -1,4 +1,4 @@
-import type { Account, Category, User, Transaction } from '@prisma/client';
+import type { Account, Category, Transaction } from '@prisma/client';
 import prisma from '../prisma/client.js';
 import { sendTelegramMessageRaw } from './telegramService.js';
 import { getBriefingData, formatBriefingMarkdown } from './briefingService.js';

@@ -272,6 +272,7 @@ export interface LoansResponse {
 export interface ApiResponse<T = any> {
   success: boolean;
   message?: string;
+  data?: T;
   [key: string]: any;
 }
 

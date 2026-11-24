@@ -27,7 +27,6 @@ import {
   Badge,
   Modal,
   ConfirmDialog,
-  LoadingState,
   Skeleton,
   SkeletonCard,
   SkeletonMetric,
@@ -36,7 +35,7 @@ import {
   InstitutionLogo,
   INSTITUTIONS,
 } from '../components/ui';
-import { formatCurrency, formatSecondaryUSD, formatDate, DynamicIcon } from '../utils/formatters';
+import { formatCurrency, formatDate } from '../utils/formatters';
 
 export interface AccountDetail extends Account {
   balanceHistory?: Array<{ month: string; balance: number }>;

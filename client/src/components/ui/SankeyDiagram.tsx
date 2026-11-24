@@ -55,7 +55,6 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
   accountNodes,
   expenseNodes,
   savingsNodes = [],
-  flows,
   currency = 'MVR',
   hide = false,
   className = '',
@@ -101,7 +100,6 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
     const flowBase = Math.max(totalIncome, totalAccounts, totalOutflows, 1);
 
     // Canvas dimensions
-    const svgWidth = 980;
     const svgHeight = 440;
     const paddingTop = 36;
     const paddingBottom = 20;
@@ -355,7 +353,6 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
                   className="transition-all duration-200 cursor-pointer"
                   onMouseEnter={(e) => {
                     setHoveredRibbonId(ribbon.id);
-                    const rect = e.currentTarget.getBoundingClientRect();
                     setTooltip({
                       x: e.clientX,
                       y: e.clientY,

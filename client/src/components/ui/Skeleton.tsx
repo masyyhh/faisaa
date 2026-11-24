@@ -66,7 +66,7 @@ export function SkeletonMetric({ count = 4, className = '' }: { count?: number; 
   );
 }
 
-export function SkeletonTable({ rows = 5, columns = 4 }: { rows?: number; columns?: number }) {
+export function SkeletonTable({ rows = 5 }: { rows?: number }) {
   return (
     <div className="faisaa-card finora-card bg-[#111218] border border-white/[0.06] rounded-xl p-5 space-y-4">
       <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">

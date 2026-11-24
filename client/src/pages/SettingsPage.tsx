@@ -20,7 +20,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import api, { Account, Category, Transaction } from '../services/api';
+import api, { Category } from '../services/api';
 import { Card, Button, Badge, Modal } from '../components/ui';
 import { DynamicIcon } from '../utils/formatters';
 
@@ -28,10 +28,6 @@ export default function SettingsPage() {
   const navigate = useNavigate();
   const { user, updateProfile, deleteAccount, addToast, triggerDataRefresh, refreshUser } = useAuth();
   const [activeTab, setActiveTab] = useState('PROFILE');
-
-  // Accounts state
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [existingTx, setExistingTx] = useState<Transaction[]>([]);
 
   // Profile State
   const [profileForm, setProfileForm] = useState<{
@@ -119,14 +115,8 @@ export default function SettingsPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const [catRes, accRes, txRes] = await Promise.all([
-        api.get('/categories'),
-        api.get('/accounts'),
-        api.get('/transactions?limit=100'),
-      ]);
+      const catRes = await api.get('/categories');
       if (catRes.data.success) setCategories(catRes.data.categories || []);
-      if (accRes.data.success) setAccounts(accRes.data.accounts || []);
-      if (txRes.data.success) setExistingTx(txRes.data.transactions || []);
     } catch {
       // Ignore
     }
@@ -219,7 +209,7 @@ export default function SettingsPage() {
 
     setSimulating(true);
     try {
-      const { data } = await api.post('/telegram/simulate', { text: simText });
+      await api.post('/telegram/simulate', { text: simText });
       addToast(`Executed simulated Telegram command: "${simText}"!`, 'success');
       setSimText('');
       triggerDataRefresh();

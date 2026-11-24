@@ -11,7 +11,6 @@ import {
   Droplet,
   Tv,
   TrendingUp,
-  Clock,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api, { Bill, Account, Category } from '../services/api';
@@ -29,7 +28,6 @@ import {
   Badge,
   Modal,
   ConfirmDialog,
-  LoadingState,
   EmptyState,
   Skeleton,
   SkeletonCard,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   TrendingUp,
   Landmark,
@@ -23,7 +23,6 @@ import {
   Card,
   Badge,
   ProgressBar,
-  LoadingState,
   Skeleton,
   SkeletonCard,
   SkeletonMetric,
@@ -32,7 +31,7 @@ import {
   InstitutionLogo,
   AmbientHalo,
 } from '../components/ui';
-import { formatCurrency, DynamicIcon } from '../utils/formatters';
+import { formatCurrency } from '../utils/formatters';
 
 export interface NetWorthItem {
   id: string;
