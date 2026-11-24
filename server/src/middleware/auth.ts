@@ -139,16 +139,26 @@ export async function protect(
   try {
     let token: string | null = null;
 
-    // 1. Prefer secure httpOnly cookie
-    if (req.cookies?.faisaa_access_token) {
-      token = req.cookies.faisaa_access_token;
+    // 1. Prefer Authorization: Bearer header
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
     }
 
-    // 2. Fallback to Authorization: Bearer header
-    if (!token) {
-      const authHeader = req.headers.authorization;
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        token = authHeader.split(' ')[1];
+    // 2. Fallback to secure httpOnly cookie
+    if (!token && req.cookies?.faisaa_access_token) {
+      token = req.cookies.faisaa_access_token;
+
+      // CSRF Defense-in-depth: For cookie-authenticated mutations, reject cross-site requests
+      const isMutating = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);
+      if (isMutating) {
+        const secFetchSite = req.headers['sec-fetch-site'];
+        if (secFetchSite === 'cross-site') {
+          return res.status(403).json({
+            success: false,
+            message: 'Cross-site request blocked by anti-CSRF policy.',
+          });
+        }
       }
     }
 

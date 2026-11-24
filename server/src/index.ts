@@ -6,6 +6,7 @@ import type { Server } from 'http';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import apiRoutes from './routes/api.js';
 import { errorHandler } from './middleware/auth.js';
@@ -24,26 +25,8 @@ const isProduction = process.env.NODE_ENV === 'production';
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
-// Cookie Parser Middleware (Zero external dependencies)
-app.use((req: Request, _res: Response, next: NextFunction) => {
-  const cookieHeader = req.headers.cookie;
-  req.cookies = {};
-  if (cookieHeader) {
-    cookieHeader.split(';').forEach((cookie) => {
-      const parts = cookie.split('=');
-      const name = parts[0]?.trim();
-      const val = parts.slice(1).join('=').trim();
-      if (name) {
-        try {
-          req.cookies![name] = decodeURIComponent(val);
-        } catch {
-          req.cookies![name] = val;
-        }
-      }
-    });
-  }
-  next();
-});
+// Signed & standard Cookie Parser Middleware
+app.use(cookieParser(process.env.COOKIE_SECRET || process.env.JWT_SECRET));
 
 app.use(
   helmet({
@@ -57,12 +40,14 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: isProduction ? ["'self'"] : ["'self'", "'unsafe-inline'"],
         styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
         imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
         connectSrc: ["'self'", 'https://api.telegram.org'],
         objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
         upgradeInsecureRequests: isProduction ? [] : null,
       },
     },
@@ -90,15 +75,22 @@ app.use(
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       // Allow requests with no origin (e.g. mobile apps, curl, server-to-server, or same-origin SPA)
       if (!origin) return callback(null, true);
-      // In development mode, allow any local or forwarded development origin
-      if (!isProduction) return callback(null, true);
+
+      // In development mode, allow loopback localhost/127.0.0.1 or explicitly configured origins
+      if (!isProduction) {
+        if (allowedOrigins.includes(origin) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+          return callback(null, true);
+        }
+        return callback(new Error(`Blocked by CORS policy: origin ${origin} is not allowed.`));
+      }
+
       // In production mode, strictly require allowed origin
       if (allowedOrigins.includes(origin)) return callback(null, true);
       return callback(new Error('Blocked by CORS policy'));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Telegram-Bot-Api-Secret-Token'],
   })
 );
 
@@ -120,6 +112,18 @@ app.use('/api/auth/register', authBruteForceLimiter);
 app.use('/api/auth/forgot-password', authBruteForceLimiter);
 app.use('/api/auth/reset-password', authBruteForceLimiter);
 app.use('/api/auth/password', authBruteForceLimiter);
+
+// Dedicated rate limiter for public Telegram Webhook to prevent flood denial-of-service
+const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Too many webhook requests from this IP. Please throttle update deliveries.',
+  },
+});
+app.use('/api/telegram/webhook', webhookLimiter);
 
 // General API rate limiter
 const apiLimiter = rateLimit({
@@ -183,6 +187,28 @@ async function startServer() {
       console.warn(
         '⚠️  DEPRECATION NOTICE: Local SQLite (finora.db) is deprecated. Production environments strictly require PostgreSQL with TDE/LUKS volume encryption.'
       );
+    }
+
+    // In production, strictly reject known placeholder or insecure development secrets
+    if (isProduction) {
+      const encKey = (process.env.ENCRYPTION_KEY || '').trim();
+      const jwtSecret = (process.env.JWT_SECRET || '').trim();
+      const insecureKeywords = ['development', 'faisaa_development', 'finora_super_secret', 'replace-with', 'changeme', 'secret123'];
+      const isWeakKey = (k: string) => k.length < 32 || insecureKeywords.some((word) => k.toLowerCase().includes(word));
+
+      if (isWeakKey(encKey)) {
+        console.error(
+          '❌ FATAL: Production strictly requires a cryptographically secure 256-bit ENCRYPTION_KEY (generate via: openssl rand -hex 32). Insecure placeholder key detected.'
+        );
+        process.exit(1);
+      }
+
+      if (isWeakKey(jwtSecret)) {
+        console.error(
+          '❌ FATAL: Production strictly requires a cryptographically secure 256-bit JWT_SECRET (generate via: openssl rand -hex 32). Insecure placeholder key detected.'
+        );
+        process.exit(1);
+      }
     }
 
     await initDatabasePragmas();

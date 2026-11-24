@@ -85,28 +85,24 @@ export async function deleteNotification(req: Request, res: Response, next: Next
 export async function sendTestTelegramAlert(req: Request, res: Response, next: NextFunction) {
   try {
     const user = req.user!;
-    // Prevent open messaging relay: ignore any client-supplied custom text
+
+    if (!user.telegramChatId) {
+      return res.status(400).json({
+        success: false,
+        message: 'No Telegram Chat ID linked to your account. Please link your Telegram account in Settings first.',
+      });
+    }
+
+    // Prevent open messaging relay: dispatch strictly to authenticated user's verified chat
     const testMessage = `Live Telegram Bot connection verified for ${user.firstName} ${user.lastName}! Current Exchange Rate: $1 USD = MVR ${Number(
       user.usdToMvrRate || 15.42
     ).toFixed(2)}.`;
-
-    const targetChatId = req.body?.chatId ? String(req.body.chatId).trim() : (user.telegramChatId || undefined);
-    const targetBotToken = req.body?.botToken ? String(req.body.botToken).trim() : (user.telegramBotToken || undefined);
-
-    if (!targetChatId) {
-      return res.status(400).json({
-        success: false,
-        message: 'No Telegram Chat ID provided or linked to your account.',
-      });
-    }
 
     const result = await sendTelegramNotification(
       user,
       'Telegram Bot Connected!',
       testMessage,
       {
-        botToken: targetBotToken,
-        chatId: targetChatId,
         force: true,
       }
     );

@@ -4,7 +4,7 @@ import prisma from '../prisma/client.js';
 import { handleTelegramWebhookUpdate } from '../services/telegramBotService.js';
 import { setTelegramWebhook, getTelegramBotInfo, getTelegramWebhookInfo } from '../services/telegramService.js';
 import { sendDailyBriefing } from '../services/briefingService.js';
-import { generateSecureOtp, decrypt } from '../utils/crypto.js';
+import { generateSecureOtp, decrypt, hashToken } from '../utils/crypto.js';
 
 /**
  * Public Telegram Webhook Endpoint
@@ -39,11 +39,15 @@ export async function handleWebhook(req: Request, res: Response): Promise<void> 
     // Respond 200 OK immediately so Telegram does not retry
     res.status(200).json({ ok: true });
 
-    // Process update asynchronously in background
+    // Process update asynchronously in background without logging sensitive chat contents
     if (req.body) {
-      console.log('[TelegramWebhook] Received update:', JSON.stringify(req.body));
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[TelegramWebhook] Received update ID:', req.body.update_id || 'unknown');
+      }
       const result = await handleTelegramWebhookUpdate(req.body);
-      console.log('[TelegramWebhook] Handled update result:', JSON.stringify(result));
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[TelegramWebhook] Handled update status:', Boolean(result?.handled));
+      }
     }
   } catch (err) {
     console.error('[TelegramWebhook] Error handling update:', err);
@@ -58,12 +62,13 @@ export async function generateLinkingCode(req: Request, res: Response, next: Nex
   try {
     // Generate cryptographically secure random 6-digit code (CSPRNG)
     const code = generateSecureOtp(6);
+    const hashedCode = hashToken(code);
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
     await prisma.user.update({
       where: { id: req.user!.id },
       data: {
-        telegramLinkingCode: code,
+        telegramLinkingCode: hashedCode,
         telegramLinkingExpires: expiresAt,
       },
     });
@@ -219,10 +224,16 @@ export async function simulateCommand(req: Request, res: Response, next: NextFun
  */
 export async function triggerDailyBriefing(req: Request, res: Response, next: NextFunction) {
   try {
-    const result = await sendDailyBriefing(req.user!.id, {
+    const user = req.user!;
+    if (!user.telegramChatId || user.telegramEnabled === false) {
+      return res.status(400).json({
+        success: false,
+        message: 'Telegram notifications are not linked or enabled for your account. Please connect Telegram in Settings first.',
+      });
+    }
+
+    const result = await sendDailyBriefing(user.id, {
       forceTelegram: true,
-      botToken: req.body?.botToken,
-      chatId: req.body?.chatId,
     });
 
     res.json({
