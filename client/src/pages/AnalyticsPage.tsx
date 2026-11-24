@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -27,6 +27,8 @@ import {
   SkeletonMetric,
   SkeletonChart,
   AnimatedNumber,
+  SankeyDiagram,
+  type SankeyNode,
 } from '../components/ui';
 import { formatCurrency } from '../utils/formatters';
 
@@ -86,6 +88,7 @@ export default function AnalyticsPage() {
   const [range, setRange] = useState('last_6_months');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
+  const [viewTab, setViewTab] = useState<'all' | 'sankey' | 'charts'>('all');
 
   const [cashflowData, setCashflowData] = useState<{
     timeline: CashflowTimelinePoint[];
@@ -93,12 +96,15 @@ export default function AnalyticsPage() {
   }>({ timeline: [], totals: {} });
   const [categoryData, setCategoryData] = useState<{
     spendingByCategory: SpendingCategoryItem[];
+    incomeByCategory?: Array<{ name: string; amount: number; color?: string; count?: number }>;
     spendingByMerchant: MerchantSpendingItem[];
   }>({
     spendingByCategory: [],
+    incomeByCategory: [],
     spendingByMerchant: [],
   });
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [goals, setGoals] = useState<any[]>([]);
   const [budgetPerf, setBudgetPerf] = useState<BudgetPerformanceItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -109,17 +115,19 @@ export default function AnalyticsPage() {
         range,
         ...(range === 'custom' ? { startDate: customStart, endDate: customEnd } : {}),
       };
-      const [cfRes, catRes, accRes, budRes] = await Promise.all([
+      const [cfRes, catRes, accRes, budRes, goalRes] = await Promise.all([
         api.get('/analytics/cashflow', { params }),
         api.get('/analytics/categories', { params }),
         api.get('/accounts'),
         api.get('/analytics/budgets'),
+        api.get('/goals').catch(() => ({ data: { success: false, goals: [] } })),
       ]);
 
       if (cfRes.data.success) setCashflowData(cfRes.data);
       if (catRes.data.success) setCategoryData(catRes.data);
       if (accRes.data.success) setAccounts(accRes.data.accounts || []);
       if (budRes.data.success) setBudgetPerf(budRes.data.performance || []);
+      if (goalRes.data.success) setGoals(goalRes.data.goals || []);
     } catch (err) {
       console.error('Failed to load analytics:', err);
     } finally {
@@ -160,6 +168,85 @@ export default function AnalyticsPage() {
   const { timeline = [], totals = {} } = cashflowData;
   const { spendingByCategory = [], spendingByMerchant = [] } = categoryData;
 
+  const incomeNodes: SankeyNode[] = useMemo(() => {
+    const list = categoryData.incomeByCategory || [];
+    if (list.length > 0) {
+      return list.map((i) => ({
+        id: `inc-${i.name}`,
+        name: i.name,
+        amount: Number(i.amount) || 0,
+        color: i.color || '#10B981',
+        type: 'income' as const,
+      }));
+    }
+    const inc = Number(totals.totalIncome) || 0;
+    return [
+      {
+        id: 'inc-salary',
+        name: 'Salary & Earnings',
+        amount: inc > 0 ? inc : 35000,
+        color: '#10B981',
+        type: 'income' as const,
+      },
+    ];
+  }, [categoryData.incomeByCategory, totals.totalIncome]);
+
+  const accountNodes: SankeyNode[] = useMemo(() => {
+    if (accounts.length > 0) {
+      return accounts.map((acc) => ({
+        id: acc.id,
+        name: acc.name,
+        amount: Math.max(100, Math.abs(Number(acc.balance) || 0)),
+        color: acc.color || '#6366F1',
+        institution: acc.institution,
+        type: 'account' as const,
+      }));
+    }
+    return [
+      { id: 'acc-bml', name: 'BML Rufiyaa', amount: 25000, color: '#DC2626', institution: 'BML', type: 'account' as const },
+      { id: 'acc-mib', name: 'MIB Islamic', amount: 18000, color: '#059669', institution: 'MIB', type: 'account' as const },
+    ];
+  }, [accounts]);
+
+  const expenseNodes: SankeyNode[] = useMemo(() => {
+    const list = spendingByCategory || [];
+    if (list.length > 0) {
+      return list.slice(0, 6).map((c) => ({
+        id: `cat-${c.name}`,
+        name: c.name,
+        amount: Number(c.amount) || 0,
+        color: c.color || '#EC4899',
+        type: 'expense' as const,
+      }));
+    }
+    const exp = Number(totals.totalExpenses) || 0;
+    return [
+      { id: 'cat-living', name: 'Living & Essentials', amount: exp > 0 ? exp : 18000, color: '#EC4899', type: 'expense' as const },
+    ];
+  }, [spendingByCategory, totals.totalExpenses]);
+
+  const savingsNodes: SankeyNode[] = useMemo(() => {
+    if (goals.length > 0) {
+      return goals.slice(0, 3).map((g) => ({
+        id: `goal-${g.id}`,
+        name: g.name,
+        amount: Math.max(100, Number(g.currentAmount) || 0),
+        color: g.color || '#38BDF8',
+        type: 'savings' as const,
+      }));
+    }
+    const net = Number(totals.netCashflow) || 0;
+    return [
+      {
+        id: 'savings-ret',
+        name: 'Retained Cashflow',
+        amount: net > 0 ? net : 7000,
+        color: '#38BDF8',
+        type: 'savings' as const,
+      },
+    ];
+  }, [goals, totals.netCashflow]);
+
   return (
     <div className="space-y-6">
       {/* Header & Date Filter Bar */}
@@ -189,6 +276,46 @@ export default function AnalyticsPage() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* View Mode Toggle Pill Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+          <button
+            onClick={() => setViewTab('all')}
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              viewTab === 'all'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            All Visualizations
+          </button>
+          <button
+            onClick={() => setViewTab('sankey')}
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              viewTab === 'sankey'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            Sankey Money Flow
+          </button>
+          <button
+            onClick={() => setViewTab('charts')}
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              viewTab === 'charts'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            Breakdown Charts
+          </button>
+        </div>
+
+        <span className="text-xs text-zinc-500">
+          Base Currency: <strong className="text-zinc-300">MVR</strong>
+        </span>
       </div>
 
       {range === 'custom' && (
@@ -238,8 +365,23 @@ export default function AnalyticsPage() {
         </Card>
       </div>
 
-      {/* Row 1: 1. Income vs Expenses + 2. Cashflow Over Time */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Sankey Cashflow Diagram (Money Flow) */}
+      {(viewTab === 'all' || viewTab === 'sankey') && (
+        <SankeyDiagram
+          incomeNodes={incomeNodes}
+          accountNodes={accountNodes}
+          expenseNodes={expenseNodes}
+          savingsNodes={savingsNodes}
+          currency={currency}
+          hide={hide}
+        />
+      )}
+
+      {/* Visual Analytics Charts Section */}
+      {(viewTab === 'all' || viewTab === 'charts') && (
+        <div className="space-y-6">
+          {/* Row 1: 1. Income vs Expenses + 2. Cashflow Over Time */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="min-w-0">
           <div className="mb-4">
             <h3 className="text-base font-bold text-white">1. Income vs Expenses</h3>
@@ -524,5 +666,7 @@ export default function AnalyticsPage() {
         </Card>
       </div>
     </div>
-  );
+  )}
+</div>
+);
 }

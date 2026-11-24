@@ -30,6 +30,7 @@ import {
   SkeletonChart,
   AnimatedNumber,
   InstitutionLogo,
+  AmbientHalo,
 } from '../components/ui';
 import { formatCurrency, DynamicIcon } from '../utils/formatters';
 
@@ -67,6 +68,7 @@ export default function NetWorthPage() {
   const { user, refreshTrigger } = useAuth();
   const [data, setData] = useState<NetWorthData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [scrubbedHistory, setScrubbedHistory] = useState<NetWorthHistoryPoint | null>(null);
 
   useEffect(() => {
     async function loadNetWorth() {
@@ -105,6 +107,10 @@ export default function NetWorthPage() {
   const currency = user?.currency || 'MVR';
   const hide = user?.hideBalances;
 
+  const activeNetWorth = scrubbedHistory ? scrubbedHistory.netWorth : data.netWorth;
+  const activeAssets = scrubbedHistory ? scrubbedHistory.assets : data.totalAssets;
+  const activeLiabilities = scrubbedHistory ? scrubbedHistory.liabilities : data.totalLiabilities;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -119,42 +125,56 @@ export default function NetWorthPage() {
 
       {/* Hero Net Worth Card + Assets & Liabilities Summary */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
-        <div className="hero-card-preserve lg:col-span-6 rounded-3xl p-5 sm:p-7 bg-gradient-to-br from-[#2B1966] via-[#19143D] to-[#0D1024] border border-violet-400/25 shadow-2xl flex flex-col justify-between">
-          <div>
-            <span className="text-xs uppercase tracking-widest font-semibold text-violet-300">
-              Current Net Worth
-            </span>
-            <p className="text-3xl sm:text-5xl font-bold tracking-tight text-white mt-3 font-display truncate tabular-nums">
-              <AnimatedNumber value={data.netWorth} currency={currency} hide={hide} />
-            </p>
-            <div className="flex flex-wrap items-center gap-3 mt-4">
-              <Badge variant={data.monthlyChange >= 0 ? 'success' : 'danger'}>
-                {data.monthlyChange >= 0 ? (
-                  <ArrowUpRight className="w-3.5 h-3.5" />
-                ) : (
-                  <ArrowDownRight className="w-3.5 h-3.5" />
-                )}{' '}
-                {data.monthlyChange >= 0 ? '+' : '-'}
-                <AnimatedNumber value={Math.abs(data.monthlyChange)} currency={currency} hide={hide} /> (
-                <AnimatedNumber value={data.monthlyChangePct} decimals={1} suffix="%" />) this month
-              </Badge>
-              <span className="text-xs text-violet-200/75 tabular-nums">
-                Debt-to-Asset Ratio: <strong><AnimatedNumber value={data.debtToAssetRatio} decimals={1} suffix="%" /></strong>
-              </span>
+        <div className="hero-card-preserve lg:col-span-6 rounded-3xl bg-gradient-to-br from-[#2B1966] via-[#19143D] to-[#0D1024] border border-violet-400/25 shadow-2xl relative overflow-hidden">
+          <AmbientHalo
+            status={activeNetWorth >= 0 ? 'positive' : 'negative'}
+            intensity="vibrant"
+            position="top"
+            className="p-5 sm:p-7 h-full flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs uppercase tracking-widest font-semibold text-violet-300">
+                  {scrubbedHistory ? `Net Worth (${scrubbedHistory.month})` : 'Current Net Worth'}
+                </span>
+                {scrubbedHistory && (
+                  <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full bg-violet-400/20 text-violet-200 border border-violet-400/30 animate-pulse">
+                    Timeline Point
+                  </span>
+                )}
+              </div>
+              <p className="text-3xl sm:text-5xl font-bold tracking-tight text-white mt-3 font-display truncate tabular-nums">
+                <AnimatedNumber value={activeNetWorth} currency={currency} hide={hide} />
+              </p>
+              <div className="flex flex-wrap items-center gap-3 mt-4">
+                <Badge variant={data.monthlyChange >= 0 ? 'success' : 'danger'}>
+                  {data.monthlyChange >= 0 ? (
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  ) : (
+                    <ArrowDownRight className="w-3.5 h-3.5" />
+                  )}{' '}
+                  {data.monthlyChange >= 0 ? '+' : '-'}
+                  <AnimatedNumber value={Math.abs(data.monthlyChange)} currency={currency} hide={hide} /> (
+                  <AnimatedNumber value={data.monthlyChangePct} decimals={1} suffix="%" />) this month
+                </Badge>
+                <span className="text-xs text-violet-200/75 tabular-nums">
+                  Debt-to-Asset Ratio: <strong><AnimatedNumber value={data.debtToAssetRatio} decimals={1} suffix="%" /></strong>
+                </span>
+              </div>
             </div>
-          </div>
 
-          <div className="mt-6 pt-5 border-t border-white/10 flex items-center gap-2 text-xs text-violet-200/80">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Calculated dynamically across all active asset and liability accounts</span>
-          </div>
+            <div className="mt-6 pt-5 border-t border-white/10 flex items-center gap-2 text-xs text-violet-200/80">
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <span>Calculated dynamically across all active asset and liability accounts</span>
+            </div>
+          </AmbientHalo>
         </div>
 
         <div className="lg:col-span-6 grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
           <Card className="p-4 sm:p-5 flex flex-col justify-between">
             <div className="flex items-center justify-between">
               <span className="text-[11px] uppercase tracking-wider text-zinc-400 font-semibold">
-                Total Assets
+                {scrubbedHistory ? `Assets (${scrubbedHistory.month})` : 'Total Assets'}
               </span>
               <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
                 <Landmark className="w-4 h-4" />
@@ -162,7 +182,7 @@ export default function NetWorthPage() {
             </div>
             <div className="mt-4">
               <p className="text-2xl sm:text-3xl font-bold tracking-tight text-emerald-400 font-display truncate tabular-nums">
-                <AnimatedNumber value={data.totalAssets} currency={currency} hide={hide} />
+                <AnimatedNumber value={activeAssets} currency={currency} hide={hide} />
               </p>
               <p className="text-xs text-zinc-400 mt-1">
                 {data.assets.length} liquid & investment accounts
@@ -173,7 +193,7 @@ export default function NetWorthPage() {
           <Card className="p-4 sm:p-5 flex flex-col justify-between">
             <div className="flex items-center justify-between">
               <span className="text-[11px] uppercase tracking-wider text-zinc-400 font-semibold">
-                Total Liabilities
+                {scrubbedHistory ? `Liabilities (${scrubbedHistory.month})` : 'Total Liabilities'}
               </span>
               <div className="w-9 h-9 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center">
                 <CreditCard className="w-4 h-4" />
@@ -181,7 +201,7 @@ export default function NetWorthPage() {
             </div>
             <div className="mt-4">
               <p className="text-2xl sm:text-3xl font-bold tracking-tight text-rose-400 font-display truncate tabular-nums">
-                <AnimatedNumber value={data.totalLiabilities} currency={currency} hide={hide} />
+                <AnimatedNumber value={activeLiabilities} currency={currency} hide={hide} />
               </p>
               <p className="text-xs text-zinc-400 mt-1">
                 {data.liabilities.length} credit card & loan balances
@@ -195,7 +215,14 @@ export default function NetWorthPage() {
       <Card className="min-w-0 p-4 sm:p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-sm font-semibold text-white">Historical Net Worth Trajectory</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-white">Historical Net Worth Trajectory</h3>
+              {scrubbedHistory && (
+                <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 animate-pulse">
+                  Scrubbing: {scrubbedHistory.month}
+                </span>
+              )}
+            </div>
             <p className="text-xs text-zinc-400">
               6-month evolution of Total Assets, Liabilities, and Net Worth
             </p>
@@ -205,7 +232,15 @@ export default function NetWorthPage() {
 
         <div className="h-76 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data.history || []}>
+            <AreaChart
+              data={data.history || []}
+              onMouseMove={(e: any) => {
+                if (e && e.activePayload && e.activePayload.length > 0) {
+                  setScrubbedHistory(e.activePayload[0].payload);
+                }
+              }}
+              onMouseLeave={() => setScrubbedHistory(null)}
+            >
               <defs>
                 <linearGradient id="nwGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#6366F1" stopOpacity={0.3} />
@@ -220,6 +255,7 @@ export default function NetWorthPage() {
               <XAxis dataKey="month" stroke="#71717A" fontSize={11} tickLine={false} axisLine={false} />
               <YAxis stroke="#71717A" fontSize={11} tickLine={false} axisLine={false} />
               <Tooltip
+                cursor={{ stroke: '#6366F1', strokeWidth: 1.5, strokeDasharray: '4 4' }}
                 formatter={(v: any) => formatCurrency(Number(v) || 0, currency, hide)}
                 contentStyle={{
                   backgroundColor: '#111218',
